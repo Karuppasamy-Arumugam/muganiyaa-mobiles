@@ -312,37 +312,86 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* Supporting Partner Area */}
-      <section className="py-4 border-top border-bottom" style={{ backgroundColor: '#FFFFFF' }}>
+            {/* Supporting Partner Area */}
+      <section
+        className="py-4 border-top border-bottom"
+        style={{ backgroundColor: '#FFFFFF' }}
+        aria-labelledby="partner-section-title"
+      >
         <div className="container">
           <div className="text-center mb-3">
-            <span className="text-muted small text-uppercase fw-bold" style={{ letterSpacing: '0.08em' }}>
+            <span
+              id="partner-section-title"
+              className="text-muted small text-uppercase fw-bold"
+              style={{ letterSpacing: '0.08em' }}
+            >
               Authorized Store Retail Partnerships
             </span>
           </div>
-          <div className="row g-3 justify-content-center align-items-center text-center">
+
+          <div className="row g-3 justify-content-center text-center">
             <div className="col-12 col-md-4">
-              <div className="p-3 border rounded bg-light">
-                <div className="fw-bold text-dark fs-6">Official Partner of JioMart Digital</div>
-                <small className="text-muted">Wide range of consumer electronics & digital solutions</small>
+              <div className="h-100 p-3 border rounded bg-light">
+                <div className="fw-bold text-dark fs-6">
+                  Official Partner of JioMart Digital
+                </div>
+                <p className="small text-muted mb-3">
+                  Wide range of consumer electronics and digital solutions.
+                </p>
+                <a
+                  href="https://www.jiomart.com/page/about-us"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="btn btn-sm btn-outline-danger"
+                >
+                  Explore JioMart
+                  <span className="visually-hidden"> (opens in a new tab)</span>
+                </a>
               </div>
             </div>
+
             <div className="col-12 col-md-4">
-              <div className="p-3 border rounded bg-light">
+              <div className="h-100 p-3 border rounded bg-light">
                 <div className="fw-bold text-dark fs-6">Partner of vivo</div>
-                <small className="text-muted">Direct brand distributor for smartphones & accessories</small>
+                <p className="small text-muted mb-3">
+                  Smartphones and accessories available at our store.
+                </p>
+                <a
+                  href="https://www.vivo.com/in/content/about-us"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="btn btn-sm btn-outline-danger"
+                >
+                  Explore vivo
+                  <span className="visually-hidden"> (opens in a new tab)</span>
+                </a>
               </div>
             </div>
+
             <div className="col-12 col-md-4">
-              <div className="p-3 border rounded bg-light">
+              <div className="h-100 p-3 border rounded bg-light">
                 <div className="fw-bold text-dark fs-6">Partner of OPPO</div>
-                <small className="text-muted">Authorized stockist for OPPO camera smartphones</small>
+                <p className="small text-muted mb-3">
+                  OPPO smartphones available at our store.
+                </p>
+                <a
+                  href="https://www.oppo.com/in/about/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="btn btn-sm btn-outline-danger"
+                >
+                  Explore OPPO
+                  <span className="visually-hidden"> (opens in a new tab)</span>
+                </a>
               </div>
             </div>
           </div>
-          <div className="text-center mt-2">
+
+          <div className="text-center mt-3">
             <small className="text-muted" style={{ fontSize: '0.75rem' }}>
-              *Owner-provided retail partnership statements. Does not imply JioMart Digital stock integration or authorized brand repair center status.
+              Partnership descriptions are provided by the store. These links
+              lead to the companies’ official websites and do not confirm
+              stock integration or authorized repair-centre status.
             </small>
           </div>
         </div>

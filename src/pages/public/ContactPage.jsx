@@ -11,7 +11,10 @@ import {
   Wrench
 } from 'lucide-react';
 import { useData } from '../../context/DataContext';
-import { isSupabaseConfigured } from '../../services/supabaseClient';
+import {
+  supabase,
+  isSupabaseConfigured
+} from '../../services/supabaseClient';
 
 export default function ContactPage() {
   const [searchParams] = useSearchParams();
@@ -24,11 +27,16 @@ export default function ContactPage() {
     customerName: '',
     phone: '',
     email: '',
-    enquiryType: preselectedService ? 'Store Service' : preselectedProduct ? 'Product Availability' : 'General Enquiry',
+    enquiryType: preselectedService
+      ? 'Store Service'
+      : preselectedProduct
+        ? 'Product Availability'
+        : 'General Enquiry',
     selectedProductOrService: preselectedService || preselectedProduct || '',
     message: ''
   });
 
+  const [honeypot, setHoneypot] = useState('');
   const [errors, setErrors] = useState({});
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -54,9 +62,11 @@ export default function ContactPage() {
   }, [preselectedService, preselectedProduct]);
 
   const contact = db.contactSettings || {};
-  const mapSearchQuery = contact.mapQuery || contact.address || 'Muganiyaa Mobiles';
+  const mapSearchQuery =
+    contact.mapQuery || contact.address || 'Muganiyaa Mobiles';
   const encodedMapQuery = encodeURIComponent(mapSearchQuery);
-  const mapEmbedUrl = `https://www.google.com/maps?q=${encodedMapQuery}&output=embed`;
+  const mapEmbedUrl =
+    `https://www.google.com/maps?q=${encodedMapQuery}&output=embed`;
   const savedMapUrl = String(contact.mapUrl || '').trim();
   const hasVerifiedMapUrl = /^https?:\/\//i.test(savedMapUrl);
   const mapLink = hasVerifiedMapUrl
@@ -65,26 +75,38 @@ export default function ContactPage() {
 
   const validate = () => {
     const errs = {};
+
     if (!formData.customerName.trim()) {
       errs.customerName = 'Please enter your name';
     }
+
     if (!formData.phone.trim()) {
       errs.phone = 'Please enter a contact phone number';
     } else if (formData.phone.replace(/[^0-9]/g, '').length < 10) {
       errs.phone = 'Please enter a valid 10-digit mobile number';
     }
-    if (formData.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
+
+    if (
+      formData.email &&
+      !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)
+    ) {
       errs.email = 'Please enter a valid email address';
     }
+
     if (!formData.message.trim()) {
       errs.message = 'Please write a brief enquiry message';
+    } else if (formData.message.trim().length > 2000) {
+      errs.message = 'Please keep your message under 2000 characters';
     }
+
     return errs;
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+
     if (isSubmitting) return;
+
     const validationErrors = validate();
     if (Object.keys(validationErrors).length > 0) {
       setErrors(validationErrors);
@@ -97,77 +119,117 @@ export default function ContactPage() {
     setIsSubmitting(true);
 
     try {
-      // Save first so the admin inbox still receives the enquiry if email is unavailable.
+      // Save the enquiry first so it reaches the admin dashboard
+      // even if the email service is temporarily unavailable.
       const saved = await addEnquiry(formData);
       setSavedEnquiryId(saved.id);
 
-      const accessKey = import.meta.env.VITE_WEB3FORMS_ACCESS_KEY?.trim();
-      if (accessKey) {
+      if (supabase && isSupabaseConfigured) {
         try {
-          const response = await fetch('https://api.web3forms.com/submit', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-            body: JSON.stringify({
-              access_key: accessKey,
-              name: formData.customerName.trim(),
-              phone: formData.phone.trim(),
-              email: formData.email.trim(),
-              subject: `Website enquiry: ${formData.enquiryType}`,
-              enquiry_type: formData.enquiryType,
-              product_or_service: formData.selectedProductOrService,
-              message: formData.message.trim(),
-              from_name: 'Muganiyaa-Mobiles Website'
-            })
-          });
-          const result = await response.json();
-          if (!response.ok || !result.success) throw new Error(result.message || 'Email notification failed.');
+          const { data, error } = await supabase.functions.invoke(
+            'send-enquiry',
+            {
+              body: {
+                customerName: formData.customerName.trim(),
+                phone: formData.phone.trim(),
+                email: formData.email.trim(),
+                enquiryType: formData.enquiryType,
+                selectedProductOrService:
+                  formData.selectedProductOrService.trim(),
+                message: formData.message.trim(),
+                website: honeypot
+              }
+            }
+          );
+
+          if (error || data?.success !== true) {
+            throw error || new Error(
+              data?.error || 'Email notification failed.'
+            );
+          }
+
           setEmailSent(true);
         } catch (emailError) {
-          console.error('Enquiry was saved, but its email notification failed:', emailError);
+          console.error(
+            'Enquiry was saved, but its email notification failed:',
+            emailError
+          );
           setEmailSent(false);
-          setEmailNotice('Your enquiry is saved in the Admin Dashboard, but the email notification could not be sent.');
+          setEmailNotice(
+            'Your enquiry is saved in the Admin Dashboard, but the email notification could not be sent.'
+          );
         }
       } else {
         setEmailSent(false);
-        setEmailNotice('Your enquiry is saved in the Admin Dashboard. Email notifications are not configured yet.');
+        setEmailNotice(
+          'Your enquiry is saved in this browser, but email notifications require a configured Supabase connection.'
+        );
       }
 
       setIsSubmitted(true);
     } catch (error) {
       console.error('Could not submit enquiry:', error);
-      setSubmitError(error.message || 'We could not save your enquiry. Please try again.');
+      setSubmitError(
+        error.message || 'We could not save your enquiry. Please try again.'
+      );
     } finally {
       setIsSubmitting(false);
     }
   };
 
+  const resetForm = () => {
+    setIsSubmitted(false);
+    setEmailSent(false);
+    setEmailNotice('');
+    setSubmitError('');
+    setHoneypot('');
+    setFormData({
+      customerName: '',
+      phone: '',
+      email: '',
+      enquiryType: 'General Enquiry',
+      selectedProductOrService: '',
+      message: ''
+    });
+  };
+
   return (
     <div className="contact-page pb-5">
-      {/* Page Header */}
       <div className="bg-white border-bottom py-4">
         <div className="container">
           <nav aria-label="breadcrumb">
             <ol className="breadcrumb small mb-2">
               <li className="breadcrumb-item">
-                <Link to="/" className="text-muted text-decoration-none">Home</Link>
+                <Link to="/" className="text-muted text-decoration-none">
+                  Home
+                </Link>
               </li>
-              <li className="breadcrumb-item active text-dark" aria-current="page">
+              <li
+                className="breadcrumb-item active text-dark"
+                aria-current="page"
+              >
                 Contact Us & Repairs
               </li>
             </ol>
           </nav>
-          <h1 className="fw-bold fs-3 text-dark mb-1">Contact Muganiyaa-Mobiles</h1>
+
+          <h1 className="fw-bold fs-3 text-dark mb-1">
+            Contact Muganiyaa-Mobiles
+          </h1>
           <p className="text-muted small mb-0">
-            Submit a repair request, ask about phone stock, or check in-store offers with our retail team.
+            Submit a repair request, ask about phone stock, or check in-store
+            offers with our retail team.
           </p>
         </div>
       </div>
 
       <div className="container py-5">
         <div className="row g-5">
-          {/* Contact Details & Map Area */}
           <div className="col-12 col-lg-5">
-            <div className="card p-4 border bg-white rounded-4 mb-4 shadow-sm" style={{ borderColor: 'var(--border-color)' }}>
+            <div
+              className="card p-4 border bg-white rounded-4 mb-4 shadow-sm"
+              style={{ borderColor: 'var(--border-color)' }}
+            >
               <h4 className="fw-bold mb-3 text-dark">Showroom Information</h4>
 
               <div className="d-flex flex-column gap-3 text-muted">
@@ -177,7 +239,9 @@ export default function ContactPage() {
                   </div>
                   <div>
                     <h6 className="fw-bold text-dark mb-1">Store Address</h6>
-                    <p className="small mb-0">{contact.address || 'Main Road, Demo City, Tamil Nadu 600001'}</p>
+                    <p className="small mb-0">
+                      {contact.address || 'Address not available'}
+                    </p>
                   </div>
                 </div>
 
@@ -186,10 +250,19 @@ export default function ContactPage() {
                     <Phone size={20} />
                   </div>
                   <div>
-                    <h6 className="fw-bold text-dark mb-1">Telephone & Helpline</h6>
-                    <a href={`tel:${contact.phone?.replace(/[^0-9+]/g, '')}`} className="small text-danger fw-semibold text-decoration-none">
-                      {contact.phone || '+91 98765 43210'}
-                    </a>
+                    <h6 className="fw-bold text-dark mb-1">
+                      Telephone & Helpline
+                    </h6>
+                    {contact.phone ? (
+                      <a
+                        href={`tel:${contact.phone.replace(/[^0-9+]/g, '')}`}
+                        className="small text-danger fw-semibold text-decoration-none"
+                      >
+                        {contact.phone}
+                      </a>
+                    ) : (
+                      <p className="small mb-0">Phone number not available</p>
+                    )}
                   </div>
                 </div>
 
@@ -199,7 +272,9 @@ export default function ContactPage() {
                   </div>
                   <div>
                     <h6 className="fw-bold text-dark mb-1">Email Support</h6>
-                    <p className="small mb-0">{contact.email || 'contact@muganiyaamobiles.demo'}</p>
+                    <p className="small mb-0">
+                      {contact.email || 'Email address not available'}
+                    </p>
                   </div>
                 </div>
 
@@ -209,18 +284,25 @@ export default function ContactPage() {
                   </div>
                   <div>
                     <h6 className="fw-bold text-dark mb-1">Opening Hours</h6>
-                    <p className="small mb-0">{contact.hours || 'Mon-Sat: 9:30 AM - 9:30 PM | Sun: 10:00 AM - 8:00 PM'}</p>
+                    <p className="small mb-0">
+                      {contact.hours || 'Opening hours not available'}
+                    </p>
                   </div>
                 </div>
               </div>
 
-              {/* WhatsApp Quick Action */}
               <div className="mt-4 pt-3 border-top">
                 <a
-                  href={`https://wa.me/${contact.whatsapp?.replace(/[^0-9]/g, '') || '919876543210'}`}
+                  href={`https://wa.me/${
+                    contact.whatsapp?.replace(/[^0-9]/g, '') || ''
+                  }`}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="btn btn-outline-success w-100 d-flex align-items-center justify-content-center gap-2 fw-semibold"
+                  aria-disabled={!contact.whatsapp}
+                  onClick={(event) => {
+                    if (!contact.whatsapp) event.preventDefault();
+                  }}
                 >
                   <MessageCircle size={18} />
                   <span>Chat on WhatsApp</span>
@@ -228,15 +310,20 @@ export default function ContactPage() {
               </div>
             </div>
 
-            {/* Map preview and verified showroom directions */}
-            <div className="card border rounded-4 overflow-hidden" style={{ borderColor: 'var(--border-color)' }}>
+            <div
+              className="card border rounded-4 overflow-hidden"
+              style={{ borderColor: 'var(--border-color)' }}
+            >
               <div className="p-3 d-flex align-items-center justify-content-between gap-2">
                 <div>
                   <h6 className="fw-bold text-dark mb-1">Store Location Map</h6>
-                  <p className="text-muted small mb-0">Map preview for {mapSearchQuery}</p>
+                  <p className="text-muted small mb-0">
+                    Map preview for {mapSearchQuery}
+                  </p>
                 </div>
                 <MapPin size={22} className="text-danger flex-shrink-0" />
               </div>
+
               <iframe
                 title="Muganiyaa-Mobiles showroom map"
                 src={mapEmbedUrl}
@@ -247,33 +334,58 @@ export default function ContactPage() {
                 referrerPolicy="no-referrer-when-downgrade"
                 allowFullScreen
               />
+
               <div className="p-3">
-                <a href={mapLink} target="_blank" rel="noopener noreferrer" className="btn btn-outline-danger btn-sm w-100">
+                <a
+                  href={mapLink}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="btn btn-outline-danger btn-sm w-100"
+                >
                   <MapPin size={15} className="me-1" />
-                  {hasVerifiedMapUrl ? 'Open Verified Location in Google Maps' : 'Search This Address in Google Maps'}
+                  {hasVerifiedMapUrl
+                    ? 'Open Verified Location in Google Maps'
+                    : 'Search This Address in Google Maps'}
                 </a>
-                {!hasVerifiedMapUrl && <small className="text-muted d-block mt-2">Add a verified Google Maps share link in Admin → Contact & Hours to link directly to the showroom pin.</small>}
+
+                {!hasVerifiedMapUrl && (
+                  <small className="text-muted d-block mt-2">
+                    Add a verified Google Maps share link in Admin → Contact
+                    & Hours to link directly to the showroom pin.
+                  </small>
+                )}
               </div>
             </div>
           </div>
 
-          {/* Enquiry Form Column */}
           <div className="col-12 col-lg-7">
-            <div className="card p-4 p-md-5 border rounded-4 bg-white shadow-sm" style={{ borderColor: 'var(--border-color)' }}>
+            <div
+              className="card p-4 p-md-5 border rounded-4 bg-white shadow-sm"
+              style={{ borderColor: 'var(--border-color)' }}
+            >
               {isSubmitted ? (
                 <div className="py-4 text-center">
                   <div className="p-3 rounded-circle bg-success-subtle text-success d-inline-block mb-3">
                     <CheckCircle2 size={48} />
                   </div>
+
                   <h3 className="fw-bold text-dark mb-2">Enquiry Received!</h3>
-                  <p className="text-muted small mb-4" style={{ maxWidth: '440px', margin: '0 auto' }}>
-                    Thank you, <strong>{formData.customerName}</strong>! Your enquiry has been received (ID: <code>{savedEnquiryId}</code>).
+                  <p
+                    className="text-muted small mb-4"
+                    style={{ maxWidth: '440px', margin: '0 auto' }}
+                  >
+                    Thank you, <strong>{formData.customerName}</strong>! Your
+                    enquiry has been received (ID: <code>{savedEnquiryId}</code>).
                   </p>
 
-                  <div className={`alert ${emailNotice ? 'alert-warning' : 'alert-success'} py-2 px-3 small d-inline-block mb-4`}>
+                  <div
+                    className={`alert ${
+                      emailNotice ? 'alert-warning' : 'alert-success'
+                    } py-2 px-3 small d-inline-block mb-4`}
+                  >
                     {isSupabaseConfigured
                       ? 'Your enquiry is saved in the Supabase Admin Dashboard.'
-                      : 'Demo mode: your enquiry is saved in this browser only.'}
+                      : 'Your enquiry is saved in this browser only.'}
                     {emailSent && ' An email notification was sent to the shop.'}
                     {emailNotice && ` ${emailNotice}`}
                   </div>
@@ -281,154 +393,261 @@ export default function ContactPage() {
                   <div>
                     <button
                       type="button"
-                      className="btn btn-brand-primary btn-sm px-4 py-2 me-2"
-                      onClick={() => {
-                        setIsSubmitted(false);
-                        setEmailSent(false);
-                        setEmailNotice('');
-                        setSubmitError('');
-                        setFormData({
-                          customerName: '',
-                          phone: '',
-                          email: '',
-                          enquiryType: 'General Enquiry',
-                          selectedProductOrService: '',
-                          message: ''
-                        });
-                      }}
+                      className="btn btn-brand-primary btn-sm px-4 py-2"
+                      onClick={resetForm}
                     >
                       Submit Another Enquiry
                     </button>
-                    <Link to="/admin/enquiries" className="btn btn-outline-secondary btn-sm px-3 py-2">
-                      View in Demo Admin
-                    </Link>
                   </div>
                 </div>
               ) : (
                 <form onSubmit={handleSubmit}>
+                  {/* Spam honeypot: hidden from people, but available to simple bots. */}
+                  <div
+                    aria-hidden="true"
+                    style={{
+                      position: 'absolute',
+                      left: '-10000px',
+                      width: '1px',
+                      height: '1px',
+                      overflow: 'hidden'
+                    }}
+                  >
+                    <label htmlFor="website">Leave this field empty</label>
+                    <input
+                      id="website"
+                      name="website"
+                      type="text"
+                      tabIndex={-1}
+                      autoComplete="off"
+                      value={honeypot}
+                      onChange={(event) => setHoneypot(event.target.value)}
+                    />
+                  </div>
+
                   <div className="d-flex align-items-center justify-content-between mb-3">
                     <div>
-                      <span className="badge-blush text-uppercase fw-bold mb-1 d-inline-block">Customer Care</span>
+                      <span className="badge-blush text-uppercase fw-bold mb-1 d-inline-block">
+                        Customer Care
+                      </span>
                       <h3 className="fw-bold text-dark mb-0">Send an Enquiry</h3>
                     </div>
                     <Wrench size={24} className="text-danger" />
                   </div>
+
                   <p className="text-muted small mb-4">
-                    Fill in your details below. For screen or hardware repairs, please include your phone model in the message.
+                    Fill in your details below. For screen or hardware repairs,
+                    include your phone model in the message.
                   </p>
 
-                  {submitError && <div className="alert alert-danger py-2 small" role="alert">{submitError}</div>}
+                  {submitError && (
+                    <div className="alert alert-danger py-2 small" role="alert">
+                      {submitError}
+                    </div>
+                  )}
 
                   <div className="row g-3">
-                    {/* Customer Name */}
                     <div className="col-12 col-md-6">
-                      <label htmlFor="customerName" className="form-label small fw-bold text-dark">
+                      <label
+                        htmlFor="customerName"
+                        className="form-label small fw-bold text-dark"
+                      >
                         Your Full Name <span className="text-danger">*</span>
                       </label>
                       <input
                         id="customerName"
                         type="text"
-                        className={`form-control ${errors.customerName ? 'is-invalid' : ''}`}
+                        maxLength={120}
+                        required
+                        className={`form-control ${
+                          errors.customerName ? 'is-invalid' : ''
+                        }`}
                         placeholder="e.g. Ramesh Kumar"
                         value={formData.customerName}
-                        onChange={(e) => setFormData({ ...formData, customerName: e.target.value })}
+                        onChange={(e) =>
+                          setFormData({
+                            ...formData,
+                            customerName: e.target.value
+                          })
+                        }
                       />
-                      {errors.customerName && <div className="invalid-feedback small">{errors.customerName}</div>}
+                      {errors.customerName && (
+                        <div className="invalid-feedback small">
+                          {errors.customerName}
+                        </div>
+                      )}
                     </div>
 
-                    {/* Phone Number */}
                     <div className="col-12 col-md-6">
-                      <label htmlFor="phone" className="form-label small fw-bold text-dark">
+                      <label
+                        htmlFor="phone"
+                        className="form-label small fw-bold text-dark"
+                      >
                         Mobile Phone Number <span className="text-danger">*</span>
                       </label>
                       <input
                         id="phone"
                         type="tel"
-                        className={`form-control ${errors.phone ? 'is-invalid' : ''}`}
+                        maxLength={40}
+                        required
+                        className={`form-control ${
+                          errors.phone ? 'is-invalid' : ''
+                        }`}
                         placeholder="e.g. +91 98410 12345"
                         value={formData.phone}
-                        onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                        onChange={(e) =>
+                          setFormData({ ...formData, phone: e.target.value })
+                        }
                       />
-                      {errors.phone && <div className="invalid-feedback small">{errors.phone}</div>}
+                      {errors.phone && (
+                        <div className="invalid-feedback small">
+                          {errors.phone}
+                        </div>
+                      )}
                     </div>
 
-                    {/* Email (Optional) */}
                     <div className="col-12 col-md-6">
-                      <label htmlFor="email" className="form-label small fw-bold text-dark">
-                        Email Address <span className="text-muted fw-normal">(Optional)</span>
+                      <label
+                        htmlFor="email"
+                        className="form-label small fw-bold text-dark"
+                      >
+                        Email Address{' '}
+                        <span className="text-muted fw-normal">(Optional)</span>
                       </label>
                       <input
                         id="email"
                         type="email"
-                        className={`form-control ${errors.email ? 'is-invalid' : ''}`}
+                        maxLength={254}
+                        className={`form-control ${
+                          errors.email ? 'is-invalid' : ''
+                        }`}
                         placeholder="e.g. name@example.com"
                         value={formData.email}
-                        onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                        onChange={(e) =>
+                          setFormData({ ...formData, email: e.target.value })
+                        }
                       />
-                      {errors.email && <div className="invalid-feedback small">{errors.email}</div>}
+                      {errors.email && (
+                        <div className="invalid-feedback small">
+                          {errors.email}
+                        </div>
+                      )}
                     </div>
 
-                    {/* Enquiry Type */}
                     <div className="col-12 col-md-6">
-                      <label htmlFor="enquiryType" className="form-label small fw-bold text-dark">
+                      <label
+                        htmlFor="enquiryType"
+                        className="form-label small fw-bold text-dark"
+                      >
                         Enquiry Type
                       </label>
                       <select
                         id="enquiryType"
                         className="form-select"
                         value={formData.enquiryType}
-                        onChange={(e) => setFormData({ ...formData, enquiryType: e.target.value })}
+                        onChange={(e) =>
+                          setFormData({
+                            ...formData,
+                            enquiryType: e.target.value
+                          })
+                        }
                       >
-                        <option value="Smartphone Repair">Smartphone Repair & Display</option>
-                        <option value="SIM & MNP Porting">SIM Activation & MNP Porting</option>
-                        <option value="Product Availability">Product Price & Stock Availability</option>
-                        <option value="EMI & Financing">EMI / Card Offers / Trade-in</option>
-                        <option value="Recharge & Bills">Instant Recharge & DTH Bills</option>
-                        <option value="General Enquiry">General Store Enquiry</option>
+                        <option value="Smartphone Repair">
+                          Smartphone Repair & Display
+                        </option>
+                        <option value="SIM & MNP Porting">
+                          SIM Activation & MNP Porting
+                        </option>
+                        <option value="Product Availability">
+                          Product Price & Stock Availability
+                        </option>
+                        <option value="EMI & Financing">
+                          EMI / Card Offers / Trade-in
+                        </option>
+                        <option value="Recharge & Bills">
+                          Instant Recharge & DTH Bills
+                        </option>
+                        <option value="General Enquiry">
+                          General Store Enquiry
+                        </option>
                       </select>
                     </div>
 
-                    {/* Optional Product / Service Selection */}
                     <div className="col-12">
-                      <label htmlFor="selectedProductOrService" className="form-label small fw-bold text-dark">
+                      <label
+                        htmlFor="selectedProductOrService"
+                        className="form-label small fw-bold text-dark"
+                      >
                         Specific Model / Item / Service
                       </label>
                       <input
                         id="selectedProductOrService"
                         type="text"
+                        maxLength={160}
                         className="form-control"
-                        placeholder="e.g. Samsung Galaxy S24 (Onyx Black) or Cracked Screen"
+                        placeholder="e.g. Samsung Galaxy model or cracked screen"
                         value={formData.selectedProductOrService}
-                        onChange={(e) => setFormData({ ...formData, selectedProductOrService: e.target.value })}
+                        onChange={(e) =>
+                          setFormData({
+                            ...formData,
+                            selectedProductOrService: e.target.value
+                          })
+                        }
                       />
                     </div>
 
-                    {/* Message */}
                     <div className="col-12">
-                      <label htmlFor="message" className="form-label small fw-bold text-dark">
-                        Your Message / Issue Description <span className="text-danger">*</span>
+                      <label
+                        htmlFor="message"
+                        className="form-label small fw-bold text-dark"
+                      >
+                        Your Message / Issue Description{' '}
+                        <span className="text-danger">*</span>
                       </label>
                       <textarea
                         id="message"
                         rows={4}
-                        className={`form-control ${errors.message ? 'is-invalid' : ''}`}
-                        placeholder="Describe what you are looking for or the fault symptoms (e.g. screen flickering, blank display, battery drain, porting from Airtel to Jio)..."
+                        maxLength={2000}
+                        required
+                        className={`form-control ${
+                          errors.message ? 'is-invalid' : ''
+                        }`}
+                        placeholder="Describe what you are looking for or the fault symptoms."
                         value={formData.message}
-                        onChange={(e) => setFormData({ ...formData, message: e.target.value })}
+                        onChange={(e) =>
+                          setFormData({
+                            ...formData,
+                            message: e.target.value
+                          })
+                        }
                       />
-                      {errors.message && <div className="invalid-feedback small">{errors.message}</div>}
+                      {errors.message && (
+                        <div className="invalid-feedback small">
+                          {errors.message}
+                        </div>
+                      )}
                     </div>
 
-                    {/* Submit Button & Disclosure */}
                     <div className="col-12 mt-4">
-                      <button type="submit" disabled={isSubmitting} className="btn btn-brand-primary w-100 py-3 fw-bold d-flex align-items-center justify-content-center gap-2">
+                      <button
+                        type="submit"
+                        disabled={isSubmitting}
+                        className="btn btn-brand-primary w-100 py-3 fw-bold d-flex align-items-center justify-content-center gap-2"
+                      >
                         <Send size={18} />
-                        <span>{isSubmitting ? 'Submitting…' : 'Submit Store Enquiry'}</span>
+                        <span>
+                          {isSubmitting
+                            ? 'Submitting…'
+                            : 'Submit Store Enquiry'}
+                        </span>
                       </button>
-                      <small className="text-muted d-block text-center mt-2" style={{ fontSize: '0.75rem' }}>
-                        {isSupabaseConfigured
-                          ? 'Your enquiry will be saved securely for the Admin Dashboard. We may also email the shop.'
-                          : '*Notice: Demo mode stores enquiries only in this browser until Supabase is configured.'}
+
+                      <small
+                        className="text-muted d-block text-center mt-2"
+                        style={{ fontSize: '0.75rem' }}
+                      >
+                        Your enquiry is saved for the store team. Email
+                        notification may also be sent.
                       </small>
                     </div>
                   </div>

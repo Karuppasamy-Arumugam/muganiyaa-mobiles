@@ -7,6 +7,18 @@ type ChatMessage = {
   text?: string;
 };
 
+type RateLimitBucket = {
+  count: number;
+  windowStartedAt: number;
+};
+
+const RATE_LIMIT = 10;
+const RATE_WINDOW_MS = 60_000;
+const MAX_REQUEST_BYTES = 20_000;
+
+const requestBuckets = new Map<string, RateLimitBucket>();
+let requestsSinceCleanup = 0;
+
 function getMessageText(message: ChatMessage): string {
   return String(message.content || message.text || "").trim();
 }
@@ -19,11 +31,63 @@ function getSearchWords(value: string): string[] {
     .filter((word) => word.length > 1);
 }
 
-function publicImageUrl(storagePath: string | null | undefined): string {
+function getClientIp(req: Request): string {
+  const forwardedFor = req.headers.get("x-forwarded-for");
+  const firstForwardedIp = forwardedFor?.split(",")[0]?.trim();
+
+  return req.headers.get("cf-connecting-ip") ||
+    firstForwardedIp ||
+    "unknown";
+}
+
+function checkRateLimit(clientIp: string): {
+  allowed: boolean;
+  retryAfterSeconds?: number;
+} {
+  const now = Date.now();
+  const bucket = requestBuckets.get(clientIp);
+
+  if (!bucket || now - bucket.windowStartedAt >= RATE_WINDOW_MS) {
+    requestBuckets.set(clientIp, {
+      count: 1,
+      windowStartedAt: now,
+    });
+  } else if (bucket.count >= RATE_LIMIT) {
+    return {
+      allowed: false,
+      retryAfterSeconds: Math.max(
+        1,
+        Math.ceil(
+          (RATE_WINDOW_MS - (now - bucket.windowStartedAt)) / 1000,
+        ),
+      ),
+    };
+  } else {
+    bucket.count += 1;
+  }
+
+  // Periodically remove expired entries so the map does not grow indefinitely.
+  requestsSinceCleanup += 1;
+  if (requestsSinceCleanup >= 100) {
+    for (const [ip, entry] of requestBuckets.entries()) {
+      if (now - entry.windowStartedAt >= RATE_WINDOW_MS) {
+        requestBuckets.delete(ip);
+      }
+    }
+    requestsSinceCleanup = 0;
+  }
+
+  return { allowed: true };
+}
+
+function publicImageUrl(
+  storagePath: string | null | undefined,
+  storage: any,
+): string {
   if (!storagePath) return "";
   if (/^https?:\/\//i.test(storagePath)) return storagePath;
 
-  const { data } = (globalThis as any).__supabaseStorage
+  const { data } = storage
     .from("product-images")
     .getPublicUrl(storagePath);
 
@@ -32,13 +96,34 @@ function publicImageUrl(storagePath: string | null | undefined): string {
 
 export default {
   fetch: withSupabase(
-    { auth: ["publishable", "secret"] },
+    { auth: ["publishable"] },
     async (req, ctx) => {
       try {
         if (req.method !== "POST") {
           return Response.json(
             { error: "Use POST to send a chat message." },
             { status: 405 },
+          );
+        }
+
+        const contentLength = Number(req.headers.get("content-length") || 0);
+        if (contentLength > MAX_REQUEST_BYTES) {
+          return Response.json(
+            { error: "The chat request is too large. Please shorten it and try again." },
+            { status: 413 },
+          );
+        }
+
+        const rateLimit = checkRateLimit(getClientIp(req));
+        if (!rateLimit.allowed) {
+          return Response.json(
+            { error: "Too many messages. Please wait a minute and try again." },
+            {
+              status: 429,
+              headers: {
+                "Retry-After": String(rateLimit.retryAfterSeconds || 60),
+              },
+            },
           );
         }
 
@@ -50,7 +135,16 @@ export default {
           );
         }
 
-        const body = await req.json();
+        let body: { message?: unknown; history?: unknown };
+        try {
+          body = await req.json();
+        } catch {
+          return Response.json(
+            { error: "The request body must be valid JSON." },
+            { status: 400 },
+          );
+        }
+
         const message = String(body.message || "").trim();
         const history = Array.isArray(body.history)
           ? (body.history as ChatMessage[]).slice(-8)
@@ -143,10 +237,13 @@ export default {
               .filter((image) => image.product_id === product.id)
               .sort(
                 (a, b) =>
-                  Number(Boolean(b.is_primary)) - Number(Boolean(a.is_primary)) ||
+                  Number(Boolean(b.is_primary)) -
+                    Number(Boolean(a.is_primary)) ||
                   a.sort_order - b.sort_order,
               )
-              .map((image) => publicImageUrl(image.storage_path, ctx.supabase.storage))
+              .map((image) =>
+                publicImageUrl(image.storage_path, ctx.supabase.storage)
+              )
               .filter(Boolean);
 
             const searchableText = [
@@ -167,7 +264,8 @@ export default {
               .toLowerCase();
 
             const score = words.reduce(
-              (total, word) => total + (searchableText.includes(word) ? 1 : 0),
+              (total, word) =>
+                total + (searchableText.includes(word) ? 1 : 0),
               0,
             );
 
@@ -187,7 +285,7 @@ export default {
                 Number(Boolean(a.row.is_featured)),
           );
 
-        // Send a compact, relevant selection to Gemini instead of the whole database.
+        // Send a compact selection relevant to the question, not the whole database.
         const catalogueForGemini = rankedProducts.slice(0, 12).map((item) => ({
           id: item.row.id,
           name: item.row.name,
@@ -265,12 +363,12 @@ export default {
               systemInstruction: {
                 parts: [{
                   text:
-                      "You are the helpful product assistant for Muganiyaa-Mobiles in Tenkasi, Tamil Nadu. " +
-                      "The chat widget already displays a welcome greeting, so do not start replies with 'Vanakkam', 'Hello', or 'Hi'. Start directly with the answer. " +
-                      "Answer in the customer's language when practical. Use only facts present in the supplied store catalogue. " +
-                      "Never invent prices, price ranges, stock, specifications, offers, or products. " +
-                      "When asked for a category collection, list only matching products found in the catalogue. " +
-                      "If the catalogue lacks the requested information, say so and invite the customer to contact the store.",
+                    "You are the helpful product assistant for Muganiyaa-Mobiles in Tenkasi, Tamil Nadu. " +
+                    "The chat widget already displays a welcome greeting, so do not start replies with 'Vanakkam', 'Hello', or 'Hi'. Start directly with the answer. " +
+                    "Answer in the customer's language when practical. Use only facts present in the supplied store catalogue. " +
+                    "Never invent prices, price ranges, stock, specifications, offers, or products. " +
+                    "When asked for a category collection, list only matching products found in the catalogue. " +
+                    "If the catalogue lacks the requested information, say so and invite the customer to contact the store.",
                 }],
               },
               contents: conversation,
@@ -313,11 +411,14 @@ export default {
           );
         }
 
-        const allowedIds = new Set(catalogueForGemini.map((product) => product.id));
+        const allowedIds = new Set(
+          catalogueForGemini.map((product) => product.id),
+        );
+
         const recommendedIds = Array.isArray(aiResult.recommendedProductIds)
           ? aiResult.recommendedProductIds
-              .filter((id) => allowedIds.has(id))
-              .slice(0, 3)
+            .filter((id) => allowedIds.has(id))
+            .slice(0, 3)
           : [];
 
         const recommendedProducts = recommendedIds
@@ -380,7 +481,9 @@ export default {
           });
 
         return Response.json({
-          text: String(aiResult.reply || "How can I help you find a product?"),
+          text: String(
+            aiResult.reply || "How can I help you find a product?",
+          ),
           products: recommendedProducts,
           cta: null,
         });
