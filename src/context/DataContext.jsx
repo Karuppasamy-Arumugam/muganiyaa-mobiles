@@ -299,15 +299,15 @@ export function DataProvider({ children }) {
     const variants = product.variants?.length
       ? product.variants
       : [{
-          sku: '',
-          color: colors[0]?.name || '',
-          ram: '',
-          storage: '',
-          variantAttributes: {},
-          sellingPrice: product.sellingPrice,
-          originalPrice: product.originalPrice,
-          stockStatus: product.stockStatus
-        }];
+        sku: '',
+        color: colors[0]?.name || '',
+        ram: '',
+        storage: '',
+        variantAttributes: {},
+        sellingPrice: product.sellingPrice,
+        originalPrice: product.originalPrice,
+        stockStatus: product.stockStatus
+      }];
 
     const variantRows = variants.map((variant) => {
       const color = colors.find((item) => item.name === variant.color);
@@ -540,6 +540,135 @@ export function DataProvider({ children }) {
     setDb((prev) => ({
       ...prev,
       categories: prev.categories.filter((category) => category.id !== id)
+    }));
+  };
+  // Brand Actions
+  const makeBrandSlug = (name) =>
+    String(name || '')
+      .toLowerCase()
+      .trim()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/(^-|-$)/g, '');
+
+  const addBrand = async (brand) => {
+    if (!supabase) throw new Error('Supabase is not configured.');
+
+    const name = String(brand.name || '').trim();
+    if (!name) throw new Error('Enter a brand name.');
+
+    const slug = brand.slug?.trim() || makeBrandSlug(name);
+    if (!slug) throw new Error('Enter a valid brand name.');
+
+    const { data, error } = await supabase
+      .from('brands')
+      .insert({
+        name,
+        slug,
+        is_active: brand.isActive ?? true
+      })
+      .select('id, name, slug, is_active')
+      .single();
+
+    if (error) throw error;
+
+    const savedBrand = {
+      id: data.id,
+      name: data.name,
+      slug: data.slug,
+      isActive: Boolean(data.is_active)
+    };
+
+    setDb((prev) => ({
+      ...prev,
+      brands: [...(prev.brands || []), savedBrand].sort((a, b) =>
+        a.name.localeCompare(b.name)
+      )
+    }));
+
+    return savedBrand;
+  };
+
+  const updateBrand = async (id, updates) => {
+    if (!supabase) throw new Error('Supabase is not configured.');
+
+    const previousBrand = (db.brands || []).find((brand) => brand.id === id);
+    if (!previousBrand) throw new Error('Brand was not found.');
+
+    const name = String(updates.name ?? previousBrand.name).trim();
+    if (!name) throw new Error('Brand name cannot be empty.');
+
+    const slug = updates.slug?.trim() || makeBrandSlug(name);
+    const isActive = updates.isActive ?? previousBrand.isActive;
+
+    const { data, error } = await supabase
+      .from('brands')
+      .update({
+        name,
+        slug,
+        is_active: isActive,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', id)
+      .select('id, name, slug, is_active')
+      .single();
+
+    if (error) throw error;
+
+    const savedBrand = {
+      id: data.id,
+      name: data.name,
+      slug: data.slug,
+      isActive: Boolean(data.is_active)
+    };
+
+    setDb((prev) => ({
+      ...prev,
+      brands: (prev.brands || [])
+        .map((brand) => (brand.id === id ? savedBrand : brand))
+        .sort((a, b) => a.name.localeCompare(b.name)),
+      products:
+        name !== previousBrand.name
+          ? (prev.products || []).map((product) =>
+            product.brand === previousBrand.name
+              ? { ...product, brand: name }
+              : product
+          )
+          : prev.products
+    }));
+
+    return savedBrand;
+  };
+
+  const deleteBrand = async (id) => {
+    if (!supabase) throw new Error('Supabase is not configured.');
+
+    const brand = (db.brands || []).find((item) => item.id === id);
+    if (!brand) throw new Error('Brand was not found.');
+
+    // Products currently store brand as text, so prevent deleting a brand in use.
+    const { count, error: productsError } = await supabase
+      .from('products')
+      .select('id', { count: 'exact', head: true })
+      .eq('brand', brand.name);
+
+    if (productsError) throw productsError;
+
+    if (count > 0) {
+      throw new Error(
+        'This brand is assigned to products. Reassign those products before deleting the brand.'
+      );
+    }
+
+    const { error } = await supabase
+      .from('brands')
+      .delete()
+      .eq('id', id);
+
+    if (error) throw error;
+
+    setDb((prev) => ({
+      ...prev,
+      brands: (prev.brands || []).filter((item) => item.id !== id)
     }));
   };
 
@@ -986,6 +1115,9 @@ export function DataProvider({ children }) {
     addCategory,
     updateCategory,
     deleteCategory,
+    addBrand,
+    updateBrand,
+    deleteBrand,
     addOffer,
     updateOffer,
     deleteOffer,

@@ -35,9 +35,7 @@ function getClientIp(req: Request): string {
   const forwardedFor = req.headers.get("x-forwarded-for");
   const firstForwardedIp = forwardedFor?.split(",")[0]?.trim();
 
-  return req.headers.get("cf-connecting-ip") ||
-    firstForwardedIp ||
-    "unknown";
+  return req.headers.get("cf-connecting-ip") || firstForwardedIp || "unknown";
 }
 
 function checkRateLimit(clientIp: string): {
@@ -57,16 +55,13 @@ function checkRateLimit(clientIp: string): {
       allowed: false,
       retryAfterSeconds: Math.max(
         1,
-        Math.ceil(
-          (RATE_WINDOW_MS - (now - bucket.windowStartedAt)) / 1000,
-        ),
+        Math.ceil((RATE_WINDOW_MS - (now - bucket.windowStartedAt)) / 1000),
       ),
     };
   } else {
     bucket.count += 1;
   }
 
-  // Periodically remove expired entries so the map does not grow indefinitely.
   requestsSinceCleanup += 1;
   if (requestsSinceCleanup >= 100) {
     for (const [ip, entry] of requestBuckets.entries()) {
@@ -87,10 +82,7 @@ function publicImageUrl(
   if (!storagePath) return "";
   if (/^https?:\/\//i.test(storagePath)) return storagePath;
 
-  const { data } = storage
-    .from("product-images")
-    .getPublicUrl(storagePath);
-
+  const { data } = storage.from("product-images").getPublicUrl(storagePath);
   return data?.publicUrl || "";
 }
 
@@ -170,6 +162,9 @@ export default {
           variantsResult,
           imagesResult,
           specsResult,
+          offersResult,
+          servicesResult,
+          storeSettingsResult,
         ] = await Promise.all([
           ctx.supabase
             .from("products")
@@ -193,6 +188,19 @@ export default {
             .from("product_specifications")
             .select("product_id, group_name, name, value, sort_order")
             .order("sort_order"),
+          ctx.supabase
+            .from("offers")
+            .select(
+              "id, title, offer_type, discount_value, start_at, end_at, terms, is_active",
+            )
+            .eq("is_active", true),
+          // Select all service columns because the table does not have a "title" column.
+          ctx.supabase.from("services").select("*"),
+          ctx.supabase
+            .from("store_settings")
+            .select("phone, whatsapp, email, address, opening_hours, map_url")
+            .eq("id", true)
+            .maybeSingle(),
         ]);
 
         const failedQuery = [
@@ -201,12 +209,18 @@ export default {
           variantsResult,
           imagesResult,
           specsResult,
+          offersResult,
+          servicesResult,
+          storeSettingsResult,
         ].find((result) => result.error);
 
         if (failedQuery?.error) {
-          console.error("Catalogue query failed:", failedQuery.error.message);
+          console.error(
+            "Store information query failed:",
+            failedQuery.error.message,
+          );
           return Response.json(
-            { error: "I couldn't load the store catalogue. Please try again." },
+            { error: "I couldn't load the store information. Please try again." },
             { status: 500 },
           );
         }
@@ -216,6 +230,59 @@ export default {
         const variants = variantsResult.data || [];
         const images = imagesResult.data || [];
         const specifications = specsResult.data || [];
+        const now = Date.now();
+
+        const activeOffers = (offersResult.data || [])
+          .filter((offer) => {
+            const startsAt = offer.start_at
+              ? new Date(offer.start_at).getTime()
+              : null;
+            const endsAt = offer.end_at
+              ? new Date(offer.end_at).getTime()
+              : null;
+
+            return (!startsAt || startsAt <= now) && (!endsAt || endsAt >= now);
+          })
+          .map((offer) => ({
+            title: offer.title || "",
+            type: offer.offer_type || "",
+            discountValue:
+              offer.discount_value == null
+                ? null
+                : Number(offer.discount_value),
+            startsAt: offer.start_at,
+            endsAt: offer.end_at,
+            terms: offer.terms || "",
+          }));
+
+        const activeServices = (servicesResult.data || [])
+          .filter((service) => service.is_active !== false)
+          .sort(
+            (a, b) =>
+              Number(a.sort_order || 0) - Number(b.sort_order || 0),
+          )
+          .map((service) => ({
+            title:
+              service.title ||
+              service.name ||
+              service.service_name ||
+              "",
+            description: service.description || "",
+            features: Array.isArray(service.features)
+              ? service.features
+              : [],
+            enquiryTag:
+              service.enquiry_tag ||
+              service.enquiry_service ||
+              service.slug ||
+              "",
+          }));
+
+        const storeSettings = storeSettingsResult.data || {};
+        const publicContact = {
+          phone: storeSettings.phone || "",
+          whatsapp: storeSettings.whatsapp || "",
+        };
 
         const words = getSearchWords(message);
 
@@ -285,7 +352,6 @@ export default {
                 Number(Boolean(a.row.is_featured)),
           );
 
-        // Send a compact selection relevant to the question, not the whole database.
         const catalogueForGemini = rankedProducts.slice(0, 12).map((item) => ({
           id: item.row.id,
           name: item.row.name,
@@ -302,7 +368,8 @@ export default {
             ram: variant.ram || "",
             storage: variant.storage || "",
             price: Number(variant.price || item.row.base_price || 0),
-            inStock: Boolean(variant.is_available) &&
+            inStock:
+              Boolean(variant.is_available) &&
               Number(variant.stock_quantity || 0) > 0,
           })),
           specifications: item.specifications.map((spec) => ({
@@ -317,36 +384,48 @@ export default {
             const text = getMessageText(item);
             if (!text) return null;
 
-            const role = item.role === "assistant" || item.role === "model"
-              ? "model"
-              : item.role === "user"
-              ? "user"
-              : null;
+            const role =
+              item.role === "assistant" || item.role === "model"
+                ? "model"
+                : item.role === "user"
+                  ? "user"
+                  : null;
 
             return role
               ? { role, parts: [{ text: text.slice(0, 1000) }] }
               : null;
           })
           .filter(Boolean) as Array<{
-            role: "user" | "model";
-            parts: Array<{ text: string }>;
-          }>;
+          role: "user" | "model";
+          parts: Array<{ text: string }>;
+        }>;
 
         conversation.push({
           role: "user",
-          parts: [{
-            text:
-              `Customer message:\n${message}\n\n` +
-              `Store catalogue (use only these facts):\n${
-                JSON.stringify(catalogueForGemini)
-              }\n\n` +
-              `Return JSON with exactly these keys: ` +
-              `"reply" (a concise, helpful answer) and ` +
-              `"recommendedProductIds" (an array of product IDs from the catalogue, maximum 3). ` +
-              `If an exact product is unavailable, recommend the closest matching products in the catalogue. ` +
-              `Never invent prices, stock, specifications, offers, or products. ` +
-              `If the catalogue does not contain the requested fact, say you are unsure and invite the customer to contact the store.`,
-          }],
+          parts: [
+            {
+              text:
+                `Customer message:\n${message}\n\n` +
+                `Store catalogue (use only these facts):\n${JSON.stringify(catalogueForGemini)}\n\n` +
+                `Currently active store offers and EMI information:\n${JSON.stringify(activeOffers)}\n\n` +
+                `Store services:\n${JSON.stringify(activeServices)}\n\n` +
+                `Store contact and hours:\n${JSON.stringify({
+                  phone: storeSettings.phone || "",
+                  whatsapp: storeSettings.whatsapp || "",
+                  email: storeSettings.email || "",
+                  address: storeSettings.address || "",
+                  openingHours: storeSettings.opening_hours || "",
+                  mapUrl: storeSettings.map_url || "",
+                })}\n\n` +
+                `Return JSON with exactly these keys: "reply" (concise, helpful answer), ` +
+                `"recommendedProductIds" (array of catalogue product IDs, maximum 3), ` +
+                `and "showContactLinks" (boolean). Set showContactLinks true when the customer asks how to contact the store, asks for a call or WhatsApp, or when you direct them to the store because information is unavailable. ` +
+                `If an exact product is unavailable, recommend the closest matching products in the catalogue. ` +
+                `Never invent prices, stock, specifications, offer terms, services, contact details, or products. ` +
+                `Use the supplied offers for EMI/discount questions, services for repair questions, and contact data for contact, hours, or location questions. ` +
+                `If relevant information is absent, say so and invite the customer to contact the store. Do not start with a greeting.`,
+            },
+          ],
         });
 
         const model = Deno.env.get("GEMINI_MODEL") || "gemini-3.5-flash-lite";
@@ -361,15 +440,18 @@ export default {
             },
             body: JSON.stringify({
               systemInstruction: {
-                parts: [{
-                  text:
-                    "You are the helpful product assistant for Muganiyaa-Mobiles in Tenkasi, Tamil Nadu. " +
-                    "The chat widget already displays a welcome greeting, so do not start replies with 'Vanakkam', 'Hello', or 'Hi'. Start directly with the answer. " +
-                    "Answer in the customer's language when practical. Use only facts present in the supplied store catalogue. " +
-                    "Never invent prices, price ranges, stock, specifications, offers, or products. " +
-                    "When asked for a category collection, list only matching products found in the catalogue. " +
-                    "If the catalogue lacks the requested information, say so and invite the customer to contact the store.",
-                }],
+                parts: [
+                  {
+                    text:
+                      "You are the helpful product assistant for Muganiyaa-Mobiles in Tenkasi, Tamil Nadu. " +
+                      "The chat widget already displays a welcome greeting, so do not start replies with a greeting. " +
+                      "Answer in the customer's language when practical. The current message contains live catalogue, active offers, services, and store contact/settings data; use the relevant section as your only source of store facts. " +
+                      "Never invent prices, stock, specifications, offer terms, services, contact details, or products. " +
+                      "Use active offers for EMI and discount questions, services for repair questions, and store settings for hours, address, phone, and WhatsApp questions. " +
+                      "When asked for a category collection, list only matching products found in the catalogue. " +
+                      "If supplied data lacks the answer, say so and offer contact links. Return valid JSON with reply, recommendedProductIds, and showContactLinks.",
+                  },
+                ],
               },
               contents: conversation,
               generationConfig: {
@@ -384,6 +466,7 @@ export default {
         if (!geminiResponse.ok) {
           const errorText = await geminiResponse.text();
           console.error("Gemini request failed:", errorText);
+
           return Response.json(
             { error: "The assistant couldn't respond right now. Please try again." },
             { status: 502 },
@@ -399,12 +482,14 @@ export default {
         let aiResult: {
           reply?: string;
           recommendedProductIds?: string[];
+          showContactLinks?: boolean;
         };
 
         try {
           aiResult = JSON.parse(rawText);
         } catch {
           console.error("Gemini returned invalid JSON.");
+
           return Response.json(
             { error: "The assistant returned an unreadable response. Please try again." },
             { status: 502 },
@@ -417,8 +502,8 @@ export default {
 
         const recommendedIds = Array.isArray(aiResult.recommendedProductIds)
           ? aiResult.recommendedProductIds
-            .filter((id) => allowedIds.has(id))
-            .slice(0, 3)
+              .filter((id) => allowedIds.has(id))
+              .slice(0, 3)
           : [];
 
         const recommendedProducts = recommendedIds
@@ -431,26 +516,22 @@ export default {
               color: variant.color_name || "",
               ram: variant.ram || "",
               storage: variant.storage || "",
-              sellingPrice: Number(
-                variant.price || item.row.base_price || 0,
-              ),
+              sellingPrice: Number(variant.price || item.row.base_price || 0),
               originalPrice: Number(
                 variant.original_price ??
                   item.row.original_price ??
                   variant.price ??
                   0,
               ),
-              stockStatus: variant.is_available &&
-                  Number(variant.stock_quantity || 0) > 0
-                ? "In Stock"
-                : "Out of Stock",
+              stockStatus:
+                variant.is_available &&
+                Number(variant.stock_quantity || 0) > 0
+                  ? "In Stock"
+                  : "Out of Stock",
             }));
 
             const specs = Object.fromEntries(
-              item.specifications.map((spec: any) => [
-                spec.name,
-                spec.value,
-              ]),
+              item.specifications.map((spec: any) => [spec.name, spec.value]),
             );
 
             return {
@@ -460,7 +541,8 @@ export default {
               brand: item.row.brand || "",
               category: item.category?.name || "",
               description: item.row.description || "",
-              sellingPrice: productVariants[0]?.sellingPrice ??
+              sellingPrice:
+                productVariants[0]?.sellingPrice ??
                 Number(item.row.base_price || 0),
               originalPrice: Number(
                 item.row.original_price ?? item.row.base_price ?? 0,
@@ -470,8 +552,8 @@ export default {
               highlights: item.row.highlights || [],
               variants: productVariants,
               stockStatus: productVariants.some(
-                  (variant: any) => variant.stockStatus === "In Stock",
-                )
+                (variant: any) => variant.stockStatus === "In Stock",
+              )
                 ? "In Stock"
                 : "Out of Stock",
               specifications: specs,
@@ -481,17 +563,17 @@ export default {
           });
 
         return Response.json({
-          text: String(
-            aiResult.reply || "How can I help you find a product?",
-          ),
+          text: String(aiResult.reply || "How can I help you find a product?"),
           products: recommendedProducts,
           cta: null,
+          contact: aiResult.showContactLinks ? publicContact : null,
         });
       } catch (error) {
         console.error(
           "Assistant function error:",
           error instanceof Error ? error.message : error,
         );
+
         return Response.json(
           { error: "Something went wrong. Please try again." },
           { status: 500 },

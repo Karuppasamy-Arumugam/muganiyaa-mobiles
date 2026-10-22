@@ -32,21 +32,21 @@ export default function AdminLayout() {
 
   const handleLogout = () => {
     logout();
-    navigate('/admin/login');
+    navigate('/store-owner-7f3c9a2e6b41d805/login');
   };
 
   const navItems = [
-    { to: '/admin', end: true, label: 'Dashboard', icon: LayoutDashboard },
-    { to: '/admin/products', label: 'Products', icon: Package },
-    { to: '/admin/categories', label: 'Categories & Brands', icon: FolderTree },
-    { to: '/admin/offers', label: 'Offers & EMI', icon: Tag },
-    { to: '/admin/banners', label: 'Hero Banners', icon: Image },
-    { to: '/admin/services', label: 'Store Services', icon: Wrench },
-    { to: '/admin/enquiries', label: 'Customer Enquiries', icon: Inbox, badge: newEnquiriesCount },
-    { to: '/admin/content', label: 'Website Content', icon: FileText },
-    { to: '/admin/contact', label: 'Contact & Hours', icon: PhoneCall },
-    { to: '/admin/chatbot', label: 'Chatbot Settings', icon: Bot },
-    { to: '/admin/demo', label: 'Demo Storage & Reset', icon: RotateCcw }
+    { to: '/store-owner-7f3c9a2e6b41d805', end: true, label: 'Dashboard', icon: LayoutDashboard },
+    { to: '/store-owner-7f3c9a2e6b41d805/products', label: 'Products', icon: Package },
+    { to: '/store-owner-7f3c9a2e6b41d805/categories', label: 'Categories & Brands', icon: FolderTree },
+    { to: '/store-owner-7f3c9a2e6b41d805/offers', label: 'Offers & EMI', icon: Tag },
+    { to: '/store-owner-7f3c9a2e6b41d805/banners', label: 'Hero Banners', icon: Image },
+    { to: '/store-owner-7f3c9a2e6b41d805/services', label: 'Store Services', icon: Wrench },
+    { to: '/store-owner-7f3c9a2e6b41d805/enquiries', label: 'Customer Enquiries', icon: Inbox, badge: newEnquiriesCount },
+    { to: '/store-owner-7f3c9a2e6b41d805/content', label: 'Website Content', icon: FileText },
+    { to: '/store-owner-7f3c9a2e6b41d805/contact', label: 'Contact & Hours', icon: PhoneCall },
+    { to: '/store-owner-7f3c9a2e6b41d805/chatbot', label: 'Chatbot Settings', icon: Bot },
+    { to: '/store-owner-7f3c9a2e6b41d805/demo', label: 'Demo Storage & Reset', icon: RotateCcw }
   ];
 
   return (
@@ -81,7 +81,7 @@ export default function AdminLayout() {
               <ExternalLink size={14} />
             </Link>
 
-            <Link to="/admin/products/new" className="btn btn-brand-primary btn-sm d-none d-sm-inline-flex align-items-center gap-1">
+            <Link to="/store-owner-7f3c9a2e6b41d805/products/new" className="btn btn-brand-primary btn-sm d-none d-sm-inline-flex align-items-center gap-1">
               <Plus size={16} />
               <span>Add Product</span>
             </Link>

@@ -6,7 +6,6 @@ import Footer from './components/common/Footer';
 import WishlistDrawer from './components/common/WishlistDrawer';
 import FloatingActions from './components/common/FloatingActions';
 
-// Public Pages
 import HomePage from './pages/public/HomePage';
 import MobilesPage from './pages/public/MobilesPage';
 import CategoriesPage from './pages/public/CategoriesPage';
@@ -15,7 +14,6 @@ import AboutPage from './pages/public/AboutPage';
 import ContactPage from './pages/public/ContactPage';
 import PrivacyPage from './pages/public/PrivacyPage';
 
-// Admin Pages
 import AdminLoginPage from './pages/admin/AdminLoginPage';
 import AdminLayout from './components/admin/AdminLayout';
 import AdminDashboard from './pages/admin/AdminDashboard';
@@ -30,8 +28,10 @@ import AdminContent from './pages/admin/AdminContent';
 import AdminContact from './pages/admin/AdminContact';
 import AdminChatbot from './pages/admin/AdminChatbot';
 import AdminDemoSettings from './pages/admin/AdminDemoSettings';
-
 import { useAuth } from './context/AuthContext';
+
+const ADMIN_PATH = '/store-owner-7f3c9a2e6b41d805';
+const ADMIN_LOGIN_PATH = `${ADMIN_PATH}/login`;
 
 function ProtectedAdminRoute({ children }) {
   const { isAuthenticated, isLoading } = useAuth();
@@ -45,7 +45,7 @@ function ProtectedAdminRoute({ children }) {
   }
 
   if (!isAuthenticated) {
-    return <Navigate to="/admin/login" replace />;
+    return <Navigate to={ADMIN_LOGIN_PATH} replace />;
   }
 
   return children;
@@ -53,11 +53,10 @@ function ProtectedAdminRoute({ children }) {
 
 export default function App() {
   const location = useLocation();
-  const isAdminRoute = location.pathname.startsWith('/admin');
+  const isAdminRoute = location.pathname.startsWith(ADMIN_PATH);
 
   return (
     <div className="app-root d-flex flex-column min-vh-100">
-      {/* Render Public Header & Navbar on public pages */}
       {!isAdminRoute && (
         <>
           <Header />
@@ -65,10 +64,8 @@ export default function App() {
         </>
       )}
 
-      {/* Main Routes */}
       <div className="flex-grow-1">
         <Routes>
-          {/* Public Routes */}
           <Route path="/" element={<HomePage />} />
           <Route path="/mobiles" element={<MobilesPage />} />
           <Route path="/categories" element={<CategoriesPage />} />
@@ -77,12 +74,10 @@ export default function App() {
           <Route path="/contact" element={<ContactPage />} />
           <Route path="/privacy" element={<PrivacyPage />} />
 
-          {/* Admin Login Route */}
-          <Route path="/admin/login" element={<AdminLoginPage />} />
+          <Route path={ADMIN_LOGIN_PATH} element={<AdminLoginPage />} />
 
-          {/* Protected Admin Routes */}
           <Route
-            path="/admin"
+            path={ADMIN_PATH}
             element={
               <ProtectedAdminRoute>
                 <AdminLayout />
@@ -104,12 +99,10 @@ export default function App() {
             <Route path="demo" element={<AdminDemoSettings />} />
           </Route>
 
-          {/* Fallback Redirect */}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </div>
 
-      {/* Render Public Footer & Overlays */}
       {!isAdminRoute && (
         <>
           <Footer />

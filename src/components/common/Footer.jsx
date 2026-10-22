@@ -181,22 +181,12 @@ export default function Footer() {
       <div style={{ backgroundColor: 'var(--secondary-bg)', borderTop: '1px solid var(--border-color)', fontSize: '0.8rem' }} className="py-3">
         <div className="container d-flex flex-column flex-sm-row align-items-center justify-content-between gap-2 text-muted">
           <div>
-            © {new Date().getFullYear()} <strong className="text-dark">Muganiyaa-Mobiles</strong>. All rights reserved. (Demo Presentation Only)
+            © {new Date().getFullYear()} <strong className="text-dark">Muganiyaa-Mobiles</strong>. All rights reserved.
           </div>
 
           <div className="d-flex align-items-center gap-3">
             <Link to="/privacy" className="text-muted text-decoration-none hover-red">
               Privacy Information
-            </Link>
-            <span>•</span>
-            {/* Discreet Owner / Admin Access */}
-            <Link
-              to="/admin/login"
-              className="text-muted text-decoration-none d-inline-flex align-items-center gap-1 hover-red"
-              title="Shop Owner Administration Portal"
-            >
-              <Lock size={12} />
-              <span>Owner Access</span>
             </Link>
           </div>
         </div>

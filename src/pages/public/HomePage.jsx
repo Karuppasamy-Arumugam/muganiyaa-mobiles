@@ -59,6 +59,11 @@ export default function HomePage() {
   const content = db.websiteContent || {};
   const contact = db.contactSettings || {};
 
+  const storePhone = contact?.phone || '';
+  const storeHours = contact?.hours || '';
+  const storeAddress = contact?.address || '';
+  const phoneHref = storePhone.replace(/[^\d+]/g, '');
+
   return (
     <div className="homepage-wrapper pb-5">
       {/* 3. Hero Carousel */}
@@ -73,9 +78,8 @@ export default function HomePage() {
               return (
                 <div
                   key={banner.id}
-                  className={`position-absolute top-0 start-0 w-100 h-100 transition-opacity ${
-                    isActive ? 'opacity-100 z-index-2' : 'opacity-0 pointer-events-none'
-                  }`}
+                  className={`position-absolute top-0 start-0 w-100 h-100 transition-opacity ${isActive ? 'opacity-100 z-index-2' : 'opacity-0 pointer-events-none'
+                    }`}
                   style={{
                     transition: prefersReducedMotion ? 'none' : 'opacity 0.6s ease-in-out',
                     zIndex: isActive ? 2 : 1
@@ -312,7 +316,7 @@ export default function HomePage() {
         </div>
       </section>
 
-            {/* Supporting Partner Area */}
+      {/* Supporting Partner Area */}
       <section
         className="py-4 border-top border-bottom"
         style={{ backgroundColor: '#FFFFFF' }}
@@ -458,36 +462,54 @@ export default function HomePage() {
       {/* 8. Contact Us Preview */}
       <section className="py-5 bg-white">
         <div className="container">
-          <div className="card border p-4 p-md-5 rounded-4" style={{ borderColor: 'var(--border-color)', backgroundColor: '#FFFFFF' }}>
+          <div
+            className="card border p-4 p-md-5 rounded-4"
+            style={{ borderColor: 'var(--border-color)', backgroundColor: '#FFFFFF' }}
+          >
             <div className="row align-items-center g-4">
               <div className="col-12 col-lg-7">
-                <span className="badge-blush text-uppercase fw-bold mb-2 d-inline-block">Need Instant Assistance?</span>
-                <h3 className="fw-bold text-dark mb-2">Speak Directly with Our Store Staff</h3>
+                <span className="badge-blush text-uppercase fw-bold mb-2 d-inline-block">
+                  Need Instant Assistance?
+                </span>
+
+                <h3 className="fw-bold text-dark mb-2">
+                  Speak Directly with Our Store Staff
+                </h3>
+
                 <p className="text-muted mb-4">
-                  Check immediate variant stock, ask for screen repair estimates, or enquire about finance documents.
+                  Check immediate variant stock, ask for screen repair estimates, or
+                  enquire about finance documents.
                 </p>
 
-                <div className="d-flex flex-wrap gap-4 text-muted small">
-                  <div className="d-flex align-items-center gap-2">
-                    <Clock size={16} className="text-danger" />
-                    <span>{contact.hours || 'Mon - Sat: 9:30 AM - 9:30 PM'}</span>
-                  </div>
-                  <div className="d-flex align-items-center gap-2">
-                    <MapPin size={16} className="text-danger" />
-                    <span>Main Road, Demo City</span>
-                  </div>
+                <div className="d-flex flex-column gap-3 text-muted small">
+                  {storeHours && (
+                    <div className="d-flex align-items-center gap-2">
+                      <Clock size={16} className="text-danger flex-shrink-0" />
+                      <span>{storeHours}</span>
+                    </div>
+                  )}
+
+                  {storeAddress && (
+                    <div className="d-flex align-items-center gap-2">
+                      <MapPin size={16} className="text-danger flex-shrink-0" />
+                      <span>{storeAddress}</span>
+                    </div>
+                  )}
                 </div>
               </div>
 
               <div className="col-12 col-lg-5 text-lg-end">
                 <div className="d-flex flex-column flex-sm-row justify-content-lg-end gap-3">
-                  <a
-                    href={`tel:${contact.phone?.replace(/[^0-9+]/g, '')}`}
-                    className="btn btn-brand-primary py-3 px-4 d-inline-flex align-items-center justify-content-center gap-2 fw-bold"
-                  >
-                    <Phone size={18} />
-                    <span>Call Store</span>
-                  </a>
+                  {phoneHref && (
+                    <a
+                      href={`tel:${phoneHref}`}
+                      className="btn btn-brand-primary py-3 px-4 d-inline-flex align-items-center justify-content-center gap-2 fw-bold"
+                    >
+                      <Phone size={18} />
+                      <span>Call Store</span>
+                    </a>
+                  )}
+
                   <Link
                     to="/contact"
                     className="btn btn-brand-outline py-3 px-4 d-inline-flex align-items-center justify-content-center gap-2 fw-bold"

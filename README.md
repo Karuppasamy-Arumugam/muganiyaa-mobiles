@@ -5,7 +5,7 @@ A modern, responsive, high-performance **catalogue and service enquiry web platf
 This project is a **100% frontend-only client presentation demo**. It runs entirely in the browser without requiring a live backend, database server, or external API keys, while providing realistic interactions, full persistence, and an interactive CMS admin panel.
 
 🔗 **Live Website:** [https://karuppasamy-arumugam.github.io/muganiya-mobiles-demo/](https://karuppasamy-arumugam.github.io/muganiya-mobiles-demo/)  
-🔐 **Admin Portal:** [https://karuppasamy-arumugam.github.io/muganiya-mobiles-demo/#/admin/login](https://karuppasamy-arumugam.github.io/muganiya-mobiles-demo/#/admin/login) (User: `admin` | Pass: `admin123`)
+🔐 **Admin Portal:** [https://karuppasamy-arumugam.github.io/muganiya-mobiles-demo/#/store-owner-7f3c9a2e6b41d805/login](https://karuppasamy-arumugam.github.io/muganiya-mobiles-demo/#/store-owner-7f3c9a2e6b41d805/login) (User: `admin` | Pass: `admin123`)
 
 ---
 
@@ -21,7 +21,7 @@ This project is a **100% frontend-only client presentation demo**. It runs entir
 - **Simulated "Muganiyaa Assistant" Chatbot:**
   - Offline NLP search engine that matches customer queries against live catalogue inventory, active discounts, repair estimates, and contact details.
   - Renders rich, interactive, clickable product cards directly inside the chat window.
-- **Comprehensive Shop Owner CMS Admin Panel (`/admin`):**
+- **Comprehensive Shop Owner CMS Admin Panel (`/store-owner-7f3c9a2e6b41d805`):**
   - Protected route with 1-click demo login (`admin` / `admin123`).
   - **8-Tab Product Editor:** Basic info, Media/Image uploader, Multi-color & RAM/Storage variants with custom pricing, Category specs, Key highlights, Linked offers, and Visibility toggle (Active/Draft/Featured).
   - **Enquiry Manager:** View contact messages, repair service requests, change repair stages (`Received` ➔ `Diagnosing` ➔ `In Repair` ➔ `Ready for Pickup` ➔ `Delivered`), and save internal staff notes.
@@ -143,7 +143,7 @@ npm run preview
 
 The administrative dashboard allows the shop owner to manage inventory, change banners, review enquiries, and update business contact details.
 
-- **URL:** `http://localhost:5173/#/admin/login` (or click **Owner Portal** in the website footer).
+- **URL:** `http://localhost:5173/#/store-owner-7f3c9a2e6b41d805/login` (or click **Owner Portal** in the website footer).
 - **Demo Username:** `admin`
 - **Demo Password:** `admin123`
 - **Quick Access:** Click the **"Fill Demo Credentials"** button on the login screen for instant 1-click access.

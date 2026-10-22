@@ -93,7 +93,7 @@ export default function AdminProducts() {
           </p>
         </div>
 
-        <Link to="/admin/products/new" className="btn btn-brand-primary d-inline-flex align-items-center gap-1">
+        <Link to="/store-owner-7f3c9a2e6b41d805/products/new" className="btn btn-brand-primary d-inline-flex align-items-center gap-1">
           <Plus size={18} />
           <span>Add New Product</span>
         </Link>
@@ -294,7 +294,7 @@ export default function AdminProducts() {
                           )}
 
                           <Link
-                            to={`/admin/products/edit/${p.id}`}
+                            to={`/store-owner-7f3c9a2e6b41d805/products/edit/${p.id}`}
                             className="btn btn-outline-primary btn-sm p-1"
                             title="Edit Product Details"
                           >

@@ -139,6 +139,15 @@ function mapSupabaseService(row) {
   };
 }
 
+function mapBrand(row) {
+  return {
+    id: row.id,
+    name: row.name || '',
+    slug: row.slug || '',
+    isActive: Boolean(row.is_active)
+  };
+}
+
 export async function fetchSupabaseCatalog(existingDatabase = {}) {
   if (!supabase) return null;
 
@@ -149,7 +158,8 @@ export async function fetchSupabaseCatalog(existingDatabase = {}) {
     imagesResult,
     specsResult,
     bannersResult,
-    servicesResult
+    servicesResult,
+    brandsResult
   ] = await Promise.all([
     supabase.from('products').select('*').order('name'),
     supabase.from('categories').select('*').order('sort_order'),
@@ -160,7 +170,8 @@ export async function fetchSupabaseCatalog(existingDatabase = {}) {
       .select('*')
       .order('sort_order'),
     supabase.from('banners').select('*').order('sort_order'),
-    supabase.from('services').select('*').order('sort_order')
+    supabase.from('services').select('*').order('sort_order'),
+    supabase.from('brands').select('*').order('name')
   ]);
 
   const failedResult = [
@@ -170,7 +181,8 @@ export async function fetchSupabaseCatalog(existingDatabase = {}) {
     imagesResult,
     specsResult,
     bannersResult,
-    servicesResult
+    servicesResult,
+    brandsResult
   ].find((result) => result.error);
 
   if (failedResult) throw failedResult.error;
@@ -189,6 +201,7 @@ export async function fetchSupabaseCatalog(existingDatabase = {}) {
       name: category.name,
       slug: category.slug
     })),
+    brands: (brandsResult.data || []).map(mapBrand),
     products: (productsResult.data || []).map((row) =>
       toCatalogProduct(row, related)
     ),

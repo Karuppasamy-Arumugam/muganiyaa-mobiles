@@ -38,7 +38,7 @@ export default function AdminDashboard() {
 
         <div className="d-flex align-items-center gap-2">
           <Link
-            to="/admin/products/new"
+            to="/store-owner-7f3c9a2e6b41d805/products/new"
             className="btn btn-brand-primary btn-sm d-inline-flex align-items-center gap-1"
           >
             <Plus size={16} />
@@ -46,7 +46,7 @@ export default function AdminDashboard() {
           </Link>
 
           <Link
-            to="/admin/banners"
+            to="/store-owner-7f3c9a2e6b41d805/banners"
             className="btn btn-outline-secondary btn-sm d-inline-flex align-items-center gap-1"
           >
             <Image size={16} />
@@ -162,27 +162,27 @@ export default function AdminDashboard() {
 
             <div className="d-flex flex-wrap gap-2">
               <Link
-                to="/admin/products/new"
+                to="/store-owner-7f3c9a2e6b41d805/products/new"
                 className="btn btn-brand-soft btn-sm d-inline-flex align-items-center gap-1"
               >
                 <Plus size={15} /> Add Product
               </Link>
 
               <Link
-                to="/admin/offers"
+                to="/store-owner-7f3c9a2e6b41d805/offers"
                 className="btn btn-brand-soft btn-sm d-inline-flex align-items-center gap-1"
               >
                 <Tag size={15} /> Manage Offers
               </Link>
 
               <Link
-                to="/admin/banners"
+                to="/store-owner-7f3c9a2e6b41d805/banners"
                 className="btn btn-brand-soft btn-sm d-inline-flex align-items-center gap-1"
               >
                 <Image size={15} /> Manage Banners
               </Link>
 
-              <Link to="/admin/contact" className="btn btn-brand-soft btn-sm">
+              <Link to="/store-owner-7f3c9a2e6b41d805/contact" className="btn btn-brand-soft btn-sm">
                 Update Contact & Hours
               </Link>
             </div>
@@ -215,7 +215,7 @@ export default function AdminDashboard() {
               </Link>
 
               <Link
-                to="/admin/demo"
+                to="/store-owner-7f3c9a2e6b41d805/demo"
                 className="btn btn-outline-secondary btn-sm"
               >
                 System Status
@@ -238,7 +238,7 @@ export default function AdminDashboard() {
           </div>
 
           <Link
-            to="/admin/enquiries"
+            to="/store-owner-7f3c9a2e6b41d805/enquiries"
             className="text-danger fw-bold text-decoration-none small d-flex align-items-center gap-1"
           >
             <span>View All ({enquiries.length})</span>
@@ -310,7 +310,7 @@ export default function AdminDashboard() {
 
                     <td className="text-end">
                       <Link
-                        to="/admin/enquiries"
+                        to="/store-owner-7f3c9a2e6b41d805/enquiries"
                         className="btn btn-outline-secondary btn-sm p-1 px-2"
                         style={{ fontSize: '0.75rem' }}
                       >

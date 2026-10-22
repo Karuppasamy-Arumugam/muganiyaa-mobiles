@@ -13,39 +13,43 @@ export default function FloatingActions({ currentProduct = null, currentVariant 
     {
       id: 'msg-welcome',
       sender: 'bot',
-      text: db.chatbotSettings?.welcomeMessage || 'Namaste! Welcome to Muganiyaa-Mobiles. How can I help you today? You can ask about our latest phones, screen repairs, EMI offers, or shop timings.'
+      text:
+        db.chatbotSettings?.welcomeMessage ||
+        'Namaste! Welcome to Muganiyaa-Mobiles. How can I help you today? You can ask about our latest phones, screen repairs, EMI offers, or shop timings.'
     }
   ]);
   const [inputVal, setInputVal] = useState('');
   const [isThinking, setIsThinking] = useState(false);
   const chatMessagesEndRef = useRef(null);
+  const messageIdCounter = useRef(1);
 
   const chatbotEnabled = db.chatbotSettings?.enabled ?? true;
   const contact = db.contactSettings || {};
   const whatsappNumber = contact.whatsapp?.replace(/[^0-9]/g, '');
+  const isAdmin = location.pathname.startsWith('/store-owner-7f3c9a2e6b41d805');
 
-  // Auto-scroll chat to latest message
   useEffect(() => {
     if (isChatOpen) {
       chatMessagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }
   }, [messages, isChatOpen]);
 
-  // Check admin path
-  const isAdmin = location.pathname.startsWith('/admin');
-
-
-  // Construct context-aware WhatsApp text
   const getWhatsAppMessage = () => {
     if (currentProduct) {
       const variantInfo = currentVariant
-        ? ` (${currentVariant.color}, ${currentVariant.ram || ''} ${currentVariant.storage || ''})`
+        ? ` (${currentVariant.color || ''}, ${currentVariant.ram || ''} ${currentVariant.storage || ''})`
         : '';
+
       return encodeURIComponent(
-        `Hello Muganiyaa-Mobiles! I'm enquiring about ${currentProduct.name}${variantInfo} priced at ₹${(currentVariant?.sellingPrice || currentProduct.sellingPrice)?.toLocaleString('en-IN')}. Is this in stock?`
+        `Hello Muganiyaa-Mobiles! I'm enquiring about ${currentProduct.name}${variantInfo} priced at ₹${(
+          currentVariant?.sellingPrice || currentProduct.sellingPrice
+        )?.toLocaleString('en-IN')}. Is this in stock?`
       );
     }
-    return encodeURIComponent("Hello Muganiyaa-Mobiles! I'd like to enquire about your product availability and store services.");
+
+    return encodeURIComponent(
+      "Hello Muganiyaa-Mobiles! I'd like to enquire about your product availability and store services."
+    );
   };
 
   const handleWhatsAppClick = () => {
@@ -53,86 +57,83 @@ export default function FloatingActions({ currentProduct = null, currentVariant 
       const url = `https://wa.me/${whatsappNumber}?text=${getWhatsAppMessage()}`;
       window.open(url, '_blank', 'noopener,noreferrer');
     } else {
-      // Local enquiry preview fallback when number is missing/unconfigured
       setShowWhatsAppModal(true);
     }
   };
 
-  const messageIdCounter = useRef(1);
-
   const handleSendMessage = async (textToSend) => {
-  const text = (textToSend || inputVal).trim();
-  if (!text || isThinking) return;
+    const text = (textToSend || inputVal).trim();
+    if (!text || isThinking) return;
 
-  const userMsg = {
-    id: `msg-${messageIdCounter.current++}`,
-    sender: 'user',
-    text
-  };
-
-  const history = messages
-    .filter((item) => item.sender === 'user' || item.sender === 'bot')
-    .slice(-8)
-    .map((item) => ({
-      role: item.sender === 'user' ? 'user' : 'assistant',
-      content: item.text
-    }));
-
-  // Include the product currently being viewed, when applicable.
-  const messageForAssistant = currentProduct
-    ? `${text}\n\nCurrent product page: ${currentProduct.name}${
-        currentVariant
-          ? `, colour ${currentVariant.color || ''}, RAM ${currentVariant.ram || ''}, storage ${currentVariant.storage || ''}, price ₹${currentVariant.sellingPrice || currentProduct.sellingPrice || ''}`
-          : ''
-      }`
-    : text;
-
-  setMessages((previous) => [...previous, userMsg]);
-  setInputVal('');
-  setIsThinking(true);
-
-  try {
-    if (!supabase) {
-      throw new Error('Supabase is not configured.');
-    }
-
-    const { data, error } = await supabase.functions.invoke(
-      'muganiyaa-assistant',
-      {
-        body: {
-          message: messageForAssistant,
-          history
-        }
-      }
-    );
-
-    if (error) throw error;
-    if (data?.error) throw new Error(data.error);
-
-    const botMsg = {
-      id: `msg-bot-${messageIdCounter.current++}`,
-      sender: 'bot',
-      text: data?.text || 'Sorry, I could not prepare a reply. Please try again.',
-      products: Array.isArray(data?.products) ? data.products : [],
-      cta: data?.cta || null
+    const userMsg = {
+      id: `msg-${messageIdCounter.current++}`,
+      sender: 'user',
+      text
     };
 
-    setMessages((previous) => [...previous, botMsg]);
-  } catch (error) {
-    console.error('Assistant request failed:', error);
+    const history = messages
+      .filter((item) => item.sender === 'user' || item.sender === 'bot')
+      .slice(-8)
+      .map((item) => ({
+        role: item.sender === 'user' ? 'user' : 'assistant',
+        content: item.text
+      }));
 
-    setMessages((previous) => [
-      ...previous,
-      {
+    const messageForAssistant = currentProduct
+      ? `${text}\n\nCurrent product page: ${currentProduct.name}${
+          currentVariant
+            ? `, colour ${currentVariant.color || ''}, RAM ${currentVariant.ram || ''}, storage ${currentVariant.storage || ''}, price ₹${currentVariant.sellingPrice || currentProduct.sellingPrice || ''}`
+            : ''
+        }`
+      : text;
+
+    setMessages((previous) => [...previous, userMsg]);
+    setInputVal('');
+    setIsThinking(true);
+
+    try {
+      if (!supabase) {
+        throw new Error('Supabase is not configured.');
+      }
+
+      const { data, error } = await supabase.functions.invoke(
+        'muganiyaa-assistant',
+        {
+          body: {
+            message: messageForAssistant,
+            history
+          }
+        }
+      );
+
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+
+      const botMsg = {
         id: `msg-bot-${messageIdCounter.current++}`,
         sender: 'bot',
-        text: 'I couldn’t connect to the assistant just now. Please try again in a moment or contact the store.'
-      }
-    ]);
-  } finally {
-    setIsThinking(false);
-  }
-};
+        text: data?.text || 'Sorry, I could not prepare a reply. Please try again.',
+        products: Array.isArray(data?.products) ? data.products : [],
+        cta: data?.cta || null,
+        contact: data?.contact || null
+      };
+
+      setMessages((previous) => [...previous, botMsg]);
+    } catch (error) {
+      console.error('Assistant request failed:', error);
+
+      setMessages((previous) => [
+        ...previous,
+        {
+          id: `msg-bot-${messageIdCounter.current++}`,
+          sender: 'bot',
+          text: 'I couldn’t connect to the assistant just now. Please try again in a moment or contact the store.'
+        }
+      ]);
+    } finally {
+      setIsThinking(false);
+    }
+  };
 
   const starterQuestions = db.chatbotSettings?.starterQuestions || [
     'Show phones under ₹20,000',
@@ -141,14 +142,11 @@ export default function FloatingActions({ currentProduct = null, currentVariant 
     'How can I contact the shop?'
   ];
 
-  // Do not render floating action buttons on admin portal routes
   if (isAdmin) return null;
 
   return (
     <>
-      {/* Floating Action Buttons */}
       <div className="floating-actions-container" aria-label="Customer support options">
-        {/* WhatsApp Button */}
         <button
           type="button"
           className="floating-btn-whatsapp"
@@ -159,7 +157,6 @@ export default function FloatingActions({ currentProduct = null, currentVariant 
           <MessageCircle size={26} />
         </button>
 
-        {/* Chatbot Button */}
         {chatbotEnabled && (
           <button
             type="button"
@@ -177,9 +174,12 @@ export default function FloatingActions({ currentProduct = null, currentVariant 
         )}
       </div>
 
-      {/* Local WhatsApp Preview Modal (Fallback) */}
       {showWhatsAppModal && (
-        <div className="modal show d-block" style={{ backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 1060 }} role="dialog">
+        <div
+          className="modal show d-block"
+          style={{ backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 1060 }}
+          role="dialog"
+        >
           <div className="modal-dialog modal-dialog-centered">
             <div className="modal-content">
               <div className="modal-header border-0 pb-0">
@@ -187,24 +187,36 @@ export default function FloatingActions({ currentProduct = null, currentVariant 
                   <MessageCircle size={22} className="text-success" />
                   <span>WhatsApp Enquiry Preview</span>
                 </h5>
-                <button type="button" className="btn-close" onClick={() => setShowWhatsAppModal(false)} />
+                <button
+                  type="button"
+                  className="btn-close"
+                  onClick={() => setShowWhatsAppModal(false)}
+                />
               </div>
               <div className="modal-body">
                 <p className="text-muted small">
-                  In a production installation, this will open WhatsApp with your configured store phone number. Here is the pre-composed customer message that will be sent:
+                  WhatsApp opens using the number configured in the store contact settings. Here is the pre-composed message:
                 </p>
                 <div className="p-3 bg-light rounded border text-break font-monospace small">
                   {decodeURIComponent(getWhatsAppMessage())}
                 </div>
                 <div className="mt-3 p-2 border-start border-warning border-3 bg-warning-subtle small">
-                  <strong>Shop Phone:</strong> {contact.phone || '+91 98765 43210'} (Editable in Owner Admin)
+                  <strong>Shop Phone:</strong> {contact.phone || 'Not configured'}
                 </div>
               </div>
               <div className="modal-footer border-0 pt-0">
-                <button type="button" className="btn btn-secondary btn-sm" onClick={() => setShowWhatsAppModal(false)}>
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-sm"
+                  onClick={() => setShowWhatsAppModal(false)}
+                >
                   Close
                 </button>
-                <Link to="/contact" className="btn btn-brand-primary btn-sm" onClick={() => setShowWhatsAppModal(false)}>
+                <Link
+                  to="/contact"
+                  className="btn btn-brand-primary btn-sm"
+                  onClick={() => setShowWhatsAppModal(false)}
+                >
                   Use Contact Form Instead
                 </Link>
               </div>
@@ -213,10 +225,8 @@ export default function FloatingActions({ currentProduct = null, currentVariant 
         </div>
       )}
 
-      {/* Interactive Chatbot Window */}
       {chatbotEnabled && isChatOpen && (
         <div className="chatbot-popup" role="dialog" aria-label="Muganiyaa Assistant Chat">
-          {/* Header */}
           <div className="p-3 bg-white border-bottom d-flex align-items-center justify-content-between">
             <div className="d-flex align-items-center gap-2">
               <div
@@ -226,14 +236,14 @@ export default function FloatingActions({ currentProduct = null, currentVariant 
                 <Bot size={20} />
               </div>
               <div>
-                <h6 className="mb-0 fw-bold d-flex align-items-center gap-1" style={{ fontSize: '0.95rem' }}>
-                  <span>{db.chatbotSettings?.assistantName || 'Muganiyaa Assistant'}</span>
-                  <span className="badge bg-secondary-subtle text-secondary" style={{ fontSize: '0.65rem' }}>
-                    Demo
-                  </span>
+                <h6 className="mb-0 fw-bold" style={{ fontSize: '0.95rem' }}>
+                  {db.chatbotSettings?.assistantName || 'Muganiyaa Assistant'}
                 </h6>
                 <small className="text-success d-flex align-items-center gap-1" style={{ fontSize: '0.72rem' }}>
-                  <span className="d-inline-block rounded-circle bg-success" style={{ width: '6px', height: '6px' }} />
+                  <span
+                    className="d-inline-block rounded-circle bg-success"
+                    style={{ width: '6px', height: '6px' }}
+                  />
                   Gemini AI · Store Catalogue
                 </small>
               </div>
@@ -248,8 +258,10 @@ export default function FloatingActions({ currentProduct = null, currentVariant 
             </button>
           </div>
 
-          {/* Messages Stream */}
-          <div className="flex-grow-1 overflow-y-auto p-3 d-flex flex-column gap-3" style={{ backgroundColor: 'var(--secondary-bg)' }}>
+          <div
+            className="flex-grow-1 overflow-y-auto p-3 d-flex flex-column gap-3"
+            style={{ backgroundColor: 'var(--secondary-bg)' }}
+          >
             {messages.map((msg) => (
               <div
                 key={msg.id}
@@ -273,31 +285,30 @@ export default function FloatingActions({ currentProduct = null, currentVariant 
                   {msg.text}
                 </div>
 
-                {/* Clickable Recommended Products inside Chat */}
-                {msg.products && msg.products.length > 0 && (
+                {msg.products?.length > 0 && (
                   <div className="mt-2 w-100 d-flex flex-column gap-2" style={{ maxWidth: '95%' }}>
-                    {msg.products.map((p) => (
+                    {msg.products.map((product) => (
                       <div
-                        key={p.id}
+                        key={product.id}
                         className="card p-2 border bg-white shadow-sm"
                         style={{ borderColor: 'var(--border-color)', borderRadius: 'var(--radius-sm)' }}
                       >
                         <div className="d-flex align-items-center gap-2">
                           <img
-                            src={p.coverImage}
-                            alt={p.name}
+                            src={product.coverImage}
+                            alt={product.name}
                             style={{ width: '45px', height: '45px', objectFit: 'contain' }}
                           />
                           <div className="flex-grow-1 min-w-0">
                             <div className="fw-bold text-truncate" style={{ fontSize: '0.8rem' }}>
-                              {p.name}
+                              {product.name}
                             </div>
                             <div className="text-danger fw-bold" style={{ fontSize: '0.82rem' }}>
-                              ₹{p.sellingPrice?.toLocaleString('en-IN')}
+                              ₹{product.sellingPrice?.toLocaleString('en-IN')}
                             </div>
                           </div>
                           <Link
-                            to={`/products/${p.slug}`}
+                            to={`/products/${product.slug}`}
                             className="btn btn-brand-soft btn-sm p-1 px-2 text-decoration-none"
                             style={{ fontSize: '0.75rem' }}
                             onClick={() => setIsChatOpen(false)}
@@ -310,7 +321,6 @@ export default function FloatingActions({ currentProduct = null, currentVariant 
                   </div>
                 )}
 
-                {/* CTA Link inside Chat */}
                 {msg.cta && (
                   <div className="mt-2">
                     <Link
@@ -324,37 +334,59 @@ export default function FloatingActions({ currentProduct = null, currentVariant 
                     </Link>
                   </div>
                 )}
+
+                {msg.contact && (
+                  <div className="mt-2 d-flex flex-wrap gap-2" aria-label="Store contact links">
+                    {msg.contact.phone && (
+                      <a
+                        href={`tel:${String(msg.contact.phone).replace(/[^\d+]/g, '')}`}
+                        className="btn btn-outline-danger btn-sm"
+                      >
+                        Call Store
+                      </a>
+                    )}
+                    {msg.contact.whatsapp &&
+                      String(msg.contact.whatsapp).replace(/\D/g, '').length >= 10 && (
+                        <a
+                          href={`https://wa.me/${String(msg.contact.whatsapp).replace(/\D/g, '')}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="btn btn-outline-success btn-sm"
+                        >
+                          WhatsApp
+                        </a>
+                      )}
+                  </div>
+                )}
               </div>
             ))}
 
             {isThinking && (
               <div className="d-flex align-items-center gap-2 text-muted small">
                 <span className="spinner-grow spinner-grow-sm text-danger" role="status" />
-                <span>Muganiyaa Assistant is checking the catalogue...</span>
+                <span>Muganiyaa Assistant is checking the store information...</span>
               </div>
             )}
             <div ref={chatMessagesEndRef} />
           </div>
 
-          {/* Starter Chips */}
           <div className="px-3 py-2 bg-white border-top border-bottom overflow-x-auto d-flex gap-2 flex-nowrap">
-            {starterQuestions.map((q, idx) => (
+            {starterQuestions.map((question, index) => (
               <button
-                key={idx}
+                key={index}
                 type="button"
                 className="btn btn-outline-secondary btn-sm rounded-pill text-nowrap"
                 style={{ fontSize: '0.72rem', padding: '0.2rem 0.6rem' }}
-                onClick={() => handleSendMessage(q)}
+                onClick={() => handleSendMessage(question)}
               >
-                {q}
+                {question}
               </button>
             ))}
           </div>
 
-          {/* Input Area */}
           <form
-            onSubmit={(e) => {
-              e.preventDefault();
+            onSubmit={(event) => {
+              event.preventDefault();
               handleSendMessage();
             }}
             className="p-2 bg-white d-flex gap-2 align-items-center"
@@ -364,7 +396,7 @@ export default function FloatingActions({ currentProduct = null, currentVariant 
               className="form-control form-control-sm"
               placeholder="Ask about phones, repairs, EMI..."
               value={inputVal}
-              onChange={(e) => setInputVal(e.target.value)}
+              onChange={(event) => setInputVal(event.target.value)}
               style={{ borderRadius: 'var(--radius-sm)' }}
               disabled={isThinking}
             />

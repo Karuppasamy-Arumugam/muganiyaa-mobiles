@@ -1,328 +1,526 @@
-import React, { useState, useMemo } from 'react';
-import { useSearchParams, Link } from 'react-router-dom';
-import { SlidersHorizontal, X, RefreshCw, Phone, CheckCircle2 } from 'lucide-react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
+import {
+  CheckCircle2,
+  Phone,
+  RefreshCw,
+  SlidersHorizontal,
+  X
+} from 'lucide-react';
 import { useData } from '../../context/DataContext';
 import ProductCard from '../../components/common/ProductCard';
-import { MOBILE_BRANDS } from '../../services/seedData';
+
+const INITIAL_VISIBLE_COUNT = 8;
+
+function normalize(value) {
+  return String(value || '').trim().toLowerCase();
+}
+
+function formatPrice(value) {
+  return Number(value || 0).toLocaleString('en-IN');
+}
+
+function FilterChoices({
+  brands,
+  selectedBrand,
+  onBrandChange,
+  ramOptions,
+  selectedRams,
+  onRamToggle,
+  storageOptions,
+  selectedStorages,
+  onStorageToggle,
+  maxBudget,
+  selectedMaxPrice,
+  onMaxPriceChange
+}) {
+  const rangeValue = selectedMaxPrice ?? maxBudget;
+
+  return (
+    <>
+      <div className="mb-4">
+        <label className="form-label fw-semibold small mb-2" htmlFor="mobile-brand-filter">
+          Brand
+        </label>
+        <select
+          id="mobile-brand-filter"
+          className="form-select"
+          value={selectedBrand}
+          onChange={(event) => onBrandChange(event.target.value)}
+        >
+          {brands.map((brand) => (
+            <option key={brand} value={brand}>
+              {brand}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      <div className="mb-4">
+        <label className="form-label fw-semibold small d-flex justify-content-between mb-2">
+          <span>Maximum price</span>
+          <span className="text-danger">
+            {selectedMaxPrice == null
+              ? `Up to ₹${formatPrice(maxBudget)}`
+              : `₹${formatPrice(selectedMaxPrice)}`}
+          </span>
+        </label>
+        <input
+          type="range"
+          className="form-range"
+          min="2000"
+          max={maxBudget}
+          step="1000"
+          value={rangeValue}
+          onChange={(event) => onMaxPriceChange(Number(event.target.value))}
+          aria-label="Maximum mobile phone price"
+        />
+        <div className="d-flex justify-content-between small text-muted">
+          <span>₹2,000</span>
+          <span>₹{formatPrice(maxBudget)}</span>
+        </div>
+      </div>
+
+      {ramOptions.length > 0 && (
+        <div className="mb-4">
+          <div className="fw-semibold small mb-2">RAM</div>
+          <div className="d-flex flex-wrap gap-2">
+            {ramOptions.map((ram) => (
+              <button
+                key={ram}
+                type="button"
+                className={`btn btn-sm rounded-pill ${
+                  selectedRams.includes(ram)
+                    ? 'btn-danger'
+                    : 'btn-outline-secondary'
+                }`}
+                onClick={() => onRamToggle(ram)}
+                aria-pressed={selectedRams.includes(ram)}
+              >
+                {ram}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {storageOptions.length > 0 && (
+        <div>
+          <div className="fw-semibold small mb-2">Storage</div>
+          <div className="d-flex flex-wrap gap-2">
+            {storageOptions.map((storage) => (
+              <button
+                key={storage}
+                type="button"
+                className={`btn btn-sm rounded-pill ${
+                  selectedStorages.includes(storage)
+                    ? 'btn-danger'
+                    : 'btn-outline-secondary'
+                }`}
+                onClick={() => onStorageToggle(storage)}
+                aria-pressed={selectedStorages.includes(storage)}
+              >
+                {storage}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
 
 export default function MobilesPage() {
-  const { publishedProducts, db } = useData();
+  const { publishedProducts = [], db = {} } = useData();
   const [searchParams, setSearchParams] = useSearchParams();
 
-  // Filter state
   const selectedBrand = searchParams.get('brand') || 'All Brands';
-  const filterParam = searchParams.get('filter') || ''; // 'latest' or 'bestseller'
+  const filterParam = searchParams.get('filter') || '';
+
   const [selectedRams, setSelectedRams] = useState([]);
   const [selectedStorages, setSelectedStorages] = useState([]);
-  const [maxPrice, setMaxPrice] = useState(100000);
+  const [selectedMaxPrice, setSelectedMaxPrice] = useState(null);
   const [sortBy, setSortBy] = useState('featured');
-  const [mobileFilterDrawerOpen, setMobileFilterDrawerOpen] = useState(false);
-  const [visibleCount, setVisibleCount] = useState(8);
+  const [isFilterDrawerOpen, setIsFilterDrawerOpen] = useState(false);
+  const [visibleCount, setVisibleCount] = useState(INITIAL_VISIBLE_COUNT);
 
   const contact = db.contactSettings || {};
   const whyChooseUs = db.websiteContent?.whyChooseUs || [];
 
-  // Mobiles only
   const allMobiles = useMemo(() => {
-    return publishedProducts.filter((p) => p.categorySlug === 'mobiles');
+    return publishedProducts.filter((product) => {
+      const slug = normalize(product.categorySlug);
+      const categoryName = normalize(product.category);
+
+      return (
+        slug === 'mobile-phones' ||
+        slug === 'mobiles' ||
+        categoryName === 'mobile phones' ||
+        categoryName === 'mobiles'
+      );
+    });
   }, [publishedProducts]);
 
-  // Brand Pills
-  const brandsList = useMemo(() => {
-    return MOBILE_BRANDS;
-  }, []);
+  const brands = useMemo(() => {
+    const productBrands = allMobiles
+      .map((product) => String(product.brand || '').trim())
+      .filter(Boolean);
 
-  const handleBrandSelect = (brand) => {
+    return [
+      'All Brands',
+      ...Array.from(new Set(productBrands)).sort((a, b) =>
+        a.localeCompare(b)
+      )
+    ];
+  }, [allMobiles]);
+
+  const ramOptions = useMemo(() => {
+    const values = allMobiles.flatMap((product) => [
+      ...(product.ramOptions || []),
+      ...(product.variants || []).map((variant) => variant.ram)
+    ]);
+
+    return Array.from(new Set(values.map((value) => String(value || '').trim()).filter(Boolean)))
+      .sort((a, b) => parseInt(a, 10) - parseInt(b, 10));
+  }, [allMobiles]);
+
+  const storageOptions = useMemo(() => {
+    const values = allMobiles.flatMap((product) => [
+      ...(product.storageOptions || []),
+      ...(product.variants || []).map((variant) => variant.storage)
+    ]);
+
+    return Array.from(new Set(values.map((value) => String(value || '').trim()).filter(Boolean)))
+      .sort((a, b) => parseInt(a, 10) - parseInt(b, 10));
+  }, [allMobiles]);
+
+  const maxBudget = useMemo(() => {
+    const highestPrice = Math.max(
+      100000,
+      ...allMobiles.map((product) => Number(product.sellingPrice || 0))
+    );
+
+    return Math.ceil(highestPrice / 1000) * 1000;
+  }, [allMobiles]);
+
+  const updateBrand = (brand) => {
     const nextParams = new URLSearchParams(searchParams);
+
     if (brand === 'All Brands') {
       nextParams.delete('brand');
     } else {
       nextParams.set('brand', brand);
     }
+
     setSearchParams(nextParams);
-    setVisibleCount(8);
   };
 
-  const handleRamToggle = (ram) => {
-    setSelectedRams((prev) =>
-      prev.includes(ram) ? prev.filter((r) => r !== ram) : [...prev, ram]
+  const toggleValue = (value, setter) => {
+    setter((current) =>
+      current.includes(value)
+        ? current.filter((item) => item !== value)
+        : [...current, value]
     );
-    setVisibleCount(8);
-  };
-
-  const handleStorageToggle = (storage) => {
-    setSelectedStorages((prev) =>
-      prev.includes(storage) ? prev.filter((s) => s !== storage) : [...prev, storage]
-    );
-    setVisibleCount(8);
   };
 
   const clearAllFilters = () => {
     const nextParams = new URLSearchParams(searchParams);
     nextParams.delete('brand');
     nextParams.delete('filter');
+
     setSearchParams(nextParams);
     setSelectedRams([]);
     setSelectedStorages([]);
-    setMaxPrice(100000);
+    setSelectedMaxPrice(null);
     setSortBy('featured');
-    setVisibleCount(8);
+    setVisibleCount(INITIAL_VISIBLE_COUNT);
   };
+
+  useEffect(() => {
+    setVisibleCount(INITIAL_VISIBLE_COUNT);
+  }, [selectedBrand, filterParam, selectedRams, selectedStorages, selectedMaxPrice, sortBy]);
 
   const isFiltered =
     selectedBrand !== 'All Brands' ||
     selectedRams.length > 0 ||
     selectedStorages.length > 0 ||
-    maxPrice < 100000 ||
+    selectedMaxPrice != null ||
     filterParam !== '';
 
-  // Filter & Sort Logic
   const filteredProducts = useMemo(() => {
     return allMobiles
       .filter((product) => {
-        // Brand Filter
-        if (selectedBrand !== 'All Brands' && product.brand !== selectedBrand) {
+        if (
+          selectedBrand !== 'All Brands' &&
+          normalize(product.brand) !== normalize(selectedBrand)
+        ) {
           return false;
         }
 
-        // Quick query filter
         if (filterParam === 'latest' && !product.isLatestLaunch) return false;
         if (filterParam === 'bestseller' && !product.isBestSeller) return false;
 
-        // Price Filter
-        if (product.sellingPrice > maxPrice) {
+        if (
+          selectedMaxPrice != null &&
+          Number(product.sellingPrice || 0) > selectedMaxPrice
+        ) {
           return false;
         }
 
-        // RAM Filter
         if (selectedRams.length > 0) {
-          const hasRam = product.ramOptions?.some((r) => selectedRams.includes(r));
-          if (!hasRam) return false;
+          const productRams = [
+            ...(product.ramOptions || []),
+            ...(product.variants || []).map((variant) => variant.ram)
+          ].map(normalize);
+
+          if (!selectedRams.some((ram) => productRams.includes(normalize(ram)))) {
+            return false;
+          }
         }
 
-        // Storage Filter
         if (selectedStorages.length > 0) {
-          const hasStorage = product.storageOptions?.some((s) => selectedStorages.includes(s));
-          if (!hasStorage) return false;
+          const productStorages = [
+            ...(product.storageOptions || []),
+            ...(product.variants || []).map((variant) => variant.storage)
+          ].map(normalize);
+
+          if (
+            !selectedStorages.some((storage) =>
+              productStorages.includes(normalize(storage))
+            )
+          ) {
+            return false;
+          }
         }
 
         return true;
       })
       .sort((a, b) => {
-        if (sortBy === 'price-asc') return a.sellingPrice - b.sellingPrice;
-        if (sortBy === 'price-desc') return b.sellingPrice - a.sellingPrice;
-        if (sortBy === 'newest') return (b.isLatestLaunch ? 1 : 0) - (a.isLatestLaunch ? 1 : 0);
-        return (b.isFeatured ? 1 : 0) - (a.isFeatured ? 1 : 0);
+        if (sortBy === 'price-asc') {
+          return Number(a.sellingPrice || 0) - Number(b.sellingPrice || 0);
+        }
+
+        if (sortBy === 'price-desc') {
+          return Number(b.sellingPrice || 0) - Number(a.sellingPrice || 0);
+        }
+
+        if (sortBy === 'newest') {
+          return Number(Boolean(b.isLatestLaunch)) - Number(Boolean(a.isLatestLaunch));
+        }
+
+        return Number(Boolean(b.isFeatured)) - Number(Boolean(a.isFeatured));
       });
-  }, [allMobiles, selectedBrand, filterParam, maxPrice, selectedRams, selectedStorages, sortBy]);
+  }, [
+    allMobiles,
+    selectedBrand,
+    filterParam,
+    selectedMaxPrice,
+    selectedRams,
+    selectedStorages,
+    sortBy
+  ]);
 
   const visibleProducts = filteredProducts.slice(0, visibleCount);
 
+  const filterProps = {
+    brands,
+    selectedBrand,
+    onBrandChange: updateBrand,
+    ramOptions,
+    selectedRams,
+    onRamToggle: (ram) => toggleValue(ram, setSelectedRams),
+    storageOptions,
+    selectedStorages,
+    onStorageToggle: (storage) => toggleValue(storage, setSelectedStorages),
+    maxBudget,
+    selectedMaxPrice,
+    onMaxPriceChange: setSelectedMaxPrice
+  };
+
   return (
-    <div className="mobiles-page pb-5">
-      {/* Page Header */}
-      <div className="bg-white border-bottom py-4">
+    <main className="mobiles-page pb-5">
+      <section className="bg-white border-bottom py-4">
         <div className="container">
-          <nav aria-label="breadcrumb">
+          <nav aria-label="Breadcrumb">
             <ol className="breadcrumb small mb-2">
               <li className="breadcrumb-item">
-                <Link to="/" className="text-muted text-decoration-none">Home</Link>
+                <Link to="/" className="text-muted text-decoration-none">
+                  Home
+                </Link>
               </li>
               <li className="breadcrumb-item active text-dark" aria-current="page">
-                Mobiles & Smartphones
+                Mobiles
               </li>
             </ol>
           </nav>
-          <div className="d-flex flex-column flex-md-row md-align-items-center justify-content-between gap-2">
+
+          <div className="d-flex flex-column flex-md-row justify-content-between align-items-md-end gap-3">
             <div>
-              <h1 className="fw-bold mb-1 fs-3 text-dark">Mobile Phones & 5G Smartphones</h1>
-              <p className="text-muted small mb-0">
-                Explore genuine phones across all brands, price segments, and memory configurations with local in-store warranty.
+              <span className="text-danger small fw-semibold text-uppercase">
+                Mobile catalogue
+              </span>
+              <h1 className="fw-bold mb-1 fs-2 text-dark">
+                Mobile Phones &amp; 5G Smartphones
+              </h1>
+              <p className="text-muted mb-0">
+                Browse available phones by brand, budget, RAM, or storage.
               </p>
             </div>
-            <div className="d-flex align-items-center gap-2">
-              <span className="badge-blush">
-                {filteredProducts.length} {filteredProducts.length === 1 ? 'phone' : 'phones'} available
-              </span>
+            <div className="badge-blush align-self-start align-self-md-auto">
+              {filteredProducts.length}{' '}
+              {filteredProducts.length === 1 ? 'phone' : 'phones'} available
             </div>
           </div>
         </div>
-      </div>
+      </section>
 
-      {/* 3. Horizontal Brand Filter Pills */}
-      <div className="bg-white border-bottom py-3 sticky-top" style={{ zIndex: 1020, top: '65px' }}>
-        <div className="container">
-          <div className="d-flex align-items-center gap-2 overflow-x-auto pb-1" style={{ whiteSpace: 'nowrap' }}>
-            {brandsList.map((brand) => (
-              <button
-                key={brand}
-                type="button"
-                className={`filter-pill ${selectedBrand === brand ? 'active' : ''}`}
-                onClick={() => handleBrandSelect(brand)}
-              >
-                {brand}
-              </button>
-            ))}
+      {brands.length > 1 && (
+        <section className="bg-white border-bottom py-3">
+          <div className="container">
+            <div className="d-flex align-items-center gap-2 overflow-x-auto pb-1">
+              {brands.map((brand) => (
+                <button
+                  key={brand}
+                  type="button"
+                  className={`filter-pill flex-shrink-0 ${
+                    selectedBrand === brand ? 'active' : ''
+                  }`}
+                  onClick={() => updateBrand(brand)}
+                  aria-pressed={selectedBrand === brand}
+                >
+                  {brand}
+                </button>
+              ))}
+            </div>
           </div>
-        </div>
-      </div>
+        </section>
+      )}
 
-      {/* Main Listing Layout */}
-      <div className="container py-4">
-        {/* Mobile Filter Toggle & Sort Header */}
-        <div className="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-4 bg-white p-3 rounded border" style={{ borderColor: 'var(--border-color)' }}>
+      <section className="container py-4">
+        <div
+          className="d-flex flex-wrap align-items-center justify-content-between gap-3 bg-white p-3 rounded-3 border mb-4"
+          style={{ borderColor: 'var(--border-color)' }}
+        >
           <div className="d-flex align-items-center gap-2">
             <button
               type="button"
-              className="btn btn-outline-secondary btn-sm d-lg-none d-inline-flex align-items-center gap-1"
-              onClick={() => setMobileFilterDrawerOpen(true)}
+              className="btn btn-outline-secondary btn-sm d-lg-none d-inline-flex align-items-center gap-2"
+              onClick={() => setIsFilterDrawerOpen(true)}
             >
               <SlidersHorizontal size={16} />
-              <span>Filters {isFiltered && '•'}</span>
+              Filters
+              {isFiltered && <span className="text-danger">•</span>}
             </button>
 
             {isFiltered && (
               <button
                 type="button"
-                className="btn btn-link btn-sm text-danger text-decoration-none d-flex align-items-center gap-1"
+                className="btn btn-link btn-sm text-danger text-decoration-none"
                 onClick={clearAllFilters}
               >
-                <X size={14} />
-                <span>Clear Filters</span>
+                Clear filters
               </button>
             )}
           </div>
 
-          {/* Sort Dropdown */}
           <div className="d-flex align-items-center gap-2 ms-auto">
-            <label htmlFor="sortBy" className="small text-muted fw-semibold text-nowrap">Sort By:</label>
+            <label htmlFor="sortBy" className="small text-muted fw-semibold">
+              Sort
+            </label>
             <select
               id="sortBy"
               className="form-select form-select-sm"
-              style={{ width: '160px', borderColor: 'var(--border-color)' }}
+              style={{ width: '170px' }}
               value={sortBy}
-              onChange={(e) => setSortBy(e.target.value)}
+              onChange={(event) => setSortBy(event.target.value)}
             >
               <option value="featured">Featured</option>
-              <option value="newest">Newest First</option>
-              <option value="price-asc">Price: Low to High</option>
-              <option value="price-desc">Price: High to Low</option>
+              <option value="newest">Newest first</option>
+              <option value="price-asc">Price: low to high</option>
+              <option value="price-desc">Price: high to low</option>
             </select>
           </div>
         </div>
 
         <div className="row g-4">
-          {/* Desktop Filter Sidebar */}
-          <div className="col-lg-3 d-none d-lg-block">
-            <div className="card p-3 border sticky-top" style={{ top: '150px', borderColor: 'var(--border-color)', borderRadius: 'var(--radius-md)' }}>
-              <div className="d-flex align-items-center justify-content-between mb-3 pb-2 border-bottom">
-                <h6 className="fw-bold mb-0">Refine Search</h6>
+          <aside className="col-lg-3 d-none d-lg-block">
+            <div
+              className="card p-3 border sticky-top"
+              style={{
+                top: '150px',
+                borderColor: 'var(--border-color)',
+                borderRadius: 'var(--radius-md)'
+              }}
+            >
+              <div className="d-flex align-items-center justify-content-between mb-3">
+                <h2 className="h6 fw-bold mb-0">Filters</h2>
                 {isFiltered && (
-                  <button type="button" className="btn btn-link btn-sm text-danger p-0 text-decoration-none" onClick={clearAllFilters}>
+                  <button
+                    type="button"
+                    className="btn btn-link btn-sm text-danger p-0"
+                    onClick={clearAllFilters}
+                  >
                     Reset
                   </button>
                 )}
               </div>
-
-              {/* Price Filter */}
-              <div className="mb-4">
-                <label className="fw-bold small text-dark d-flex justify-content-between mb-2">
-                  <span>Max Budget</span>
-                  <span className="text-danger fw-bold">₹{maxPrice.toLocaleString('en-IN')}</span>
-                </label>
-                <input
-                  type="range"
-                  className="form-range"
-                  min="2000"
-                  max="100000"
-                  step="2000"
-                  value={maxPrice}
-                  onChange={(e) => {
-                    setMaxPrice(Number(e.target.value));
-                    setVisibleCount(8);
-                  }}
-                />
-                <div className="d-flex justify-content-between text-muted" style={{ fontSize: '0.72rem' }}>
-                  <span>₹2,000</span>
-                  <span>₹50,000</span>
-                  <span>₹1,00,000+</span>
-                </div>
-              </div>
-
-              {/* RAM Filter */}
-              <div className="mb-4">
-                <h6 className="fw-bold small text-dark mb-2">RAM Size</h6>
-                <div className="d-flex flex-column gap-1">
-                  {['4GB', '6GB', '8GB', '12GB'].map((ram) => (
-                    <label key={ram} className="d-flex align-items-center gap-2 small cursor-pointer">
-                      <input
-                        type="checkbox"
-                        className="form-check-input"
-                        checked={selectedRams.includes(ram)}
-                        onChange={() => handleRamToggle(ram)}
-                      />
-                      <span>{ram} RAM</span>
-                    </label>
-                  ))}
-                </div>
-              </div>
-
-              {/* Storage Filter */}
-              <div className="mb-3">
-                <h6 className="fw-bold small text-dark mb-2">Internal Storage</h6>
-                <div className="d-flex flex-column gap-1">
-                  {['64GB', '128GB', '256GB', '512GB'].map((storage) => (
-                    <label key={storage} className="d-flex align-items-center gap-2 small cursor-pointer">
-                      <input
-                        type="checkbox"
-                        className="form-check-input"
-                        checked={selectedStorages.includes(storage)}
-                        onChange={() => handleStorageToggle(storage)}
-                      />
-                      <span>{storage}</span>
-                    </label>
-                  ))}
-                </div>
-              </div>
+              <FilterChoices {...filterProps} />
             </div>
-          </div>
+          </aside>
 
-          {/* 4. Product Grid Area */}
           <div className="col-12 col-lg-9">
             {visibleProducts.length === 0 ? (
-              <div className="card p-5 text-center border-dashed border-2" style={{ borderColor: 'var(--border-color)' }}>
-                <div className="p-3 rounded-circle bg-light d-inline-block mx-auto mb-3">
-                  <RefreshCw size={36} className="text-muted" />
+              <div className="card border p-4 p-md-5 text-center">
+                <div className="mx-auto mb-3 p-3 rounded-circle bg-light text-danger">
+                  <RefreshCw size={28} />
                 </div>
-                <h5 className="fw-bold mb-1">No mobile phones match your criteria</h5>
-                <p className="text-muted small mb-4" style={{ maxWidth: '360px', margin: '0 auto' }}>
-                  Try relaxing your price filter, unchecking RAM/storage limits, or selecting "All Brands".
+
+                <h2 className="h5 fw-bold mb-2">
+                  {allMobiles.length === 0
+                    ? 'No published mobile phones are available yet'
+                    : 'No phones match these filters'}
+                </h2>
+
+                <p className="text-muted small mx-auto mb-3" style={{ maxWidth: '420px' }}>
+                  {allMobiles.length === 0
+                    ? 'Published products in the Mobile Phones category will appear here.'
+                    : 'Try another brand or clear your RAM, storage, and price filters.'}
                 </p>
-                <div>
-                  <button type="button" className="btn btn-brand-primary btn-sm px-4 py-2" onClick={clearAllFilters}>
-                    Clear All Filters
+
+                {isFiltered && (
+                  <button
+                    type="button"
+                    className="btn btn-brand-primary btn-sm align-self-center px-4"
+                    onClick={clearAllFilters}
+                  >
+                    Clear filters
                   </button>
-                </div>
+                )}
               </div>
             ) : (
               <>
+                <div className="d-flex justify-content-between align-items-center mb-3">
+                  <p className="small text-muted mb-0">
+                    Showing {visibleProducts.length} of {filteredProducts.length} phones
+                  </p>
+                </div>
+
                 <div className="row g-3 g-md-4">
                   {visibleProducts.map((product) => (
-                    <div key={product.id} className="col-12 col-sm-6 col-md-4">
+                    <div key={product.id} className="col-12 col-sm-6 col-xl-4">
                       <ProductCard product={product} />
                     </div>
                   ))}
                 </div>
 
-                {/* Load More Button */}
                 {visibleCount < filteredProducts.length && (
-                  <div className="text-center mt-5">
+                  <div className="text-center mt-4">
                     <button
                       type="button"
                       className="btn btn-brand-outline px-4 py-2"
-                      onClick={() => setVisibleCount((prev) => prev + 6)}
+                      onClick={() => setVisibleCount((count) => count + 6)}
                     >
-                      Load More Phones ({filteredProducts.length - visibleCount} remaining)
+                      Load more phones
                     </button>
                   </div>
                 )}
@@ -330,89 +528,48 @@ export default function MobilesPage() {
             )}
           </div>
         </div>
-      </div>
+      </section>
 
-      {/* Mobile Filters Drawer Modal */}
-      {mobileFilterDrawerOpen && (
-        <div className="modal show d-block" style={{ backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 1070 }}>
+      {isFilterDrawerOpen && (
+        <div
+          className="modal show d-block"
+          style={{ backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 1070 }}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="mobile-filter-title"
+        >
           <div className="modal-dialog modal-dialog-scrollable">
             <div className="modal-content">
               <div className="modal-header">
-                <h5 className="modal-title fw-bold">Filter Mobile Phones</h5>
-                <button type="button" className="btn-close" onClick={() => setMobileFilterDrawerOpen(false)} />
+                <h2 id="mobile-filter-title" className="modal-title h5 fw-bold">
+                  Filter phones
+                </h2>
+                <button
+                  type="button"
+                  className="btn-close"
+                  aria-label="Close filters"
+                  onClick={() => setIsFilterDrawerOpen(false)}
+                />
               </div>
+
               <div className="modal-body">
-                {/* Brand inside Drawer */}
-                <div className="mb-4">
-                  <h6 className="fw-bold small text-dark mb-2">Select Brand</h6>
-                  <select
-                    className="form-select form-select-sm"
-                    value={selectedBrand}
-                    onChange={(e) => handleBrandSelect(e.target.value)}
-                  >
-                    {brandsList.map((b) => (
-                      <option key={b} value={b}>{b}</option>
-                    ))}
-                  </select>
-                </div>
-
-                {/* Price */}
-                <div className="mb-4">
-                  <label className="fw-bold small text-dark d-flex justify-content-between mb-2">
-                    <span>Max Budget</span>
-                    <span className="text-danger fw-bold">₹{maxPrice.toLocaleString('en-IN')}</span>
-                  </label>
-                  <input
-                    type="range"
-                    className="form-range"
-                    min="2000"
-                    max="100000"
-                    step="2000"
-                    value={maxPrice}
-                    onChange={(e) => setMaxPrice(Number(e.target.value))}
-                  />
-                </div>
-
-                {/* RAM */}
-                <div className="mb-4">
-                  <h6 className="fw-bold small text-dark mb-2">RAM</h6>
-                  <div className="d-flex flex-wrap gap-2">
-                    {['4GB', '6GB', '8GB', '12GB'].map((ram) => (
-                      <button
-                        key={ram}
-                        type="button"
-                        className={`btn btn-sm ${selectedRams.includes(ram) ? 'btn-danger' : 'btn-outline-secondary'}`}
-                        onClick={() => handleRamToggle(ram)}
-                      >
-                        {ram}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Storage */}
-                <div className="mb-3">
-                  <h6 className="fw-bold small text-dark mb-2">Internal Storage</h6>
-                  <div className="d-flex flex-wrap gap-2">
-                    {['64GB', '128GB', '256GB', '512GB'].map((storage) => (
-                      <button
-                        key={storage}
-                        type="button"
-                        className={`btn btn-sm ${selectedStorages.includes(storage) ? 'btn-danger' : 'btn-outline-secondary'}`}
-                        onClick={() => handleStorageToggle(storage)}
-                      >
-                        {storage}
-                      </button>
-                    ))}
-                  </div>
-                </div>
+                <FilterChoices {...filterProps} />
               </div>
-              <div className="modal-footer">
-                <button type="button" className="btn btn-outline-secondary btn-sm" onClick={clearAllFilters}>
-                  Clear All
+
+              <div className="modal-footer justify-content-between">
+                <button
+                  type="button"
+                  className="btn btn-outline-secondary btn-sm"
+                  onClick={clearAllFilters}
+                >
+                  Clear all
                 </button>
-                <button type="button" className="btn btn-brand-primary btn-sm px-4" onClick={() => setMobileFilterDrawerOpen(false)}>
-                  Show {filteredProducts.length} Results
+                <button
+                  type="button"
+                  className="btn btn-brand-primary btn-sm px-4"
+                  onClick={() => setIsFilterDrawerOpen(false)}
+                >
+                  Show {filteredProducts.length} results
                 </button>
               </div>
             </div>
@@ -420,53 +577,74 @@ export default function MobilesPage() {
         </div>
       )}
 
-      {/* 5. Why Choose Us (Grounded Statements) */}
-      <section className="mt-5 py-5 border-top" style={{ backgroundColor: 'var(--secondary-bg)' }}>
-        <div className="container">
-          <div className="text-center max-w-xl mx-auto mb-4">
-            <span className="badge-blush text-uppercase fw-bold mb-1 d-inline-block">The Local Advantage</span>
-            <h3 className="fw-bold">Why Buy from Muganiyaa-Mobiles?</h3>
-            <p className="text-muted small">
-              Grounded, reliable service from an established local electronics retailer.
-            </p>
-          </div>
+      {whyChooseUs.length > 0 && (
+        <section
+          className="mt-4 py-5 border-top"
+          style={{ backgroundColor: 'var(--secondary-bg)' }}
+        >
+          <div className="container">
+            <div className="text-center mx-auto mb-4" style={{ maxWidth: '620px' }}>
+              <span className="badge-blush text-uppercase fw-bold mb-2 d-inline-block">
+                The local advantage
+              </span>
+              <h2 className="h3 fw-bold">Why buy from Muganiyaa-Mobiles?</h2>
+              <p className="text-muted small mb-0">
+                Get personal guidance and support from your local showroom.
+              </p>
+            </div>
 
-          <div className="row g-3 g-md-4">
-            {whyChooseUs.map((item, idx) => (
-              <div key={idx} className="col-12 col-sm-6 col-lg-3">
-                <div className="card h-100 p-4 border bg-white rounded-3 shadow-none" style={{ borderColor: 'var(--border-color)' }}>
-                  <div className="p-2 rounded-circle bg-light d-inline-flex align-items-center justify-content-center mb-3" style={{ width: '42px', height: '42px', color: 'var(--primary-red)' }}>
-                    <CheckCircle2 size={22} />
-                  </div>
-                  <h6 className="fw-bold text-dark mb-2">{item.title}</h6>
-                  <p className="text-muted small mb-0" style={{ lineHeight: '1.5' }}>
-                    {item.description}
-                  </p>
+            <div className="row g-3 g-md-4">
+              {whyChooseUs.map((item, index) => (
+                <div key={`${item.title || 'reason'}-${index}`} className="col-12 col-sm-6 col-lg-3">
+                  <article
+                    className="card h-100 p-4 border rounded-3"
+                    style={{ borderColor: 'var(--border-color)' }}
+                  >
+                    <div
+                      className="p-2 rounded-circle bg-light d-inline-flex align-items-center justify-content-center mb-3 text-danger"
+                      style={{ width: '42px', height: '42px' }}
+                    >
+                      <CheckCircle2 size={21} />
+                    </div>
+                    <h3 className="h6 fw-bold text-dark">{item.title}</h3>
+                    <p className="text-muted small mb-0" style={{ lineHeight: 1.55 }}>
+                      {item.description}
+                    </p>
+                  </article>
                 </div>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
-        </div>
-      </section>
+        </section>
+      )}
 
-      {/* 6. Contact Us Preview Strip */}
       <section className="py-4 bg-white border-top">
         <div className="container d-flex flex-column flex-md-row align-items-center justify-content-between gap-3 text-center text-md-start">
           <div>
-            <h5 className="fw-bold mb-1">Looking for a specific model or colour variant?</h5>
-            <p className="text-muted small mb-0">Call our showroom or send a quick WhatsApp message to reserve units for store pickup.</p>
+            <h2 className="h5 fw-bold mb-1">
+              Looking for a specific model or colour?
+            </h2>
+            <p className="text-muted small mb-0">
+              Contact the showroom to check availability and pickup options.
+            </p>
           </div>
+
           <div className="d-flex align-items-center gap-2 flex-shrink-0">
-            <a href={`tel:${contact.phone?.replace(/[^0-9+]/g, '')}`} className="btn btn-brand-primary btn-sm px-3 py-2 d-inline-flex align-items-center gap-1">
-              <Phone size={16} />
-              <span>{contact.phone || '+91 98765 43210'}</span>
-            </a>
+            {contact.phone && (
+              <a
+                href={`tel:${String(contact.phone).replace(/[^0-9+]/g, '')}`}
+                className="btn btn-brand-primary btn-sm px-3 py-2 d-inline-flex align-items-center gap-2"
+              >
+                <Phone size={16} />
+                <span>{contact.phone}</span>
+              </a>
+            )}
             <Link to="/contact" className="btn btn-brand-outline btn-sm px-3 py-2">
-              Contact Store
+              Contact store
             </Link>
           </div>
         </div>
       </section>
-    </div>
+    </main>
   );
 }

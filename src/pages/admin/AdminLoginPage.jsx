@@ -20,7 +20,7 @@ export default function AdminLoginPage() {
     try {
       const result = await login(email.trim(), password);
       if (result.success) {
-        navigate('/admin');
+        navigate('/store-owner-7f3c9a2e6b41d805');
       } else {
         setError(result.error);
       }
