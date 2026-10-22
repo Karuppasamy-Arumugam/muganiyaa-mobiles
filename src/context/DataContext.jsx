@@ -1034,45 +1034,57 @@ export function DataProvider({ children }) {
 
   // Enquiries Actions
   const addEnquiry = async (enquiry) => {
-    if (supabase) {
-      const subject = [enquiry.enquiryType || 'General Enquiry', enquiry.selectedProductOrService]
-        .filter(Boolean)
-        .join(' — ');
-      const { data, error } = await supabase
-        .from('enquiries')
-        .insert({
-          name: enquiry.customerName.trim(),
-          phone: enquiry.phone.trim(),
-          email: enquiry.email?.trim() || null,
-          subject,
-          message: enquiry.message.trim()
-        })
-        .select('id, name, phone, email, subject, message, internal_status, internal_notes, created_at')
-        .single();
+  if (supabase) {
+    const subject = [
+      enquiry.enquiryType || 'General Enquiry',
+      enquiry.selectedProductOrService
+    ]
+      .filter(Boolean)
+      .join(' — ');
 
-      if (error) throw error;
-      const savedEnquiry = mapSupabaseEnquiry(data);
-      setDb((prev) => ({
-        ...prev,
-        enquiries: [savedEnquiry, ...(prev.enquiries || []).filter((row) => row.id !== savedEnquiry.id)]
-      }));
-      return savedEnquiry;
-    }
+    const { error } = await supabase
+      .from('enquiries')
+      .insert({
+        name: enquiry.customerName.trim(),
+        phone: enquiry.phone.trim(),
+        email: enquiry.email?.trim() || null,
+        subject,
+        message: enquiry.message.trim()
+      });
 
-    const newEnquiry = {
+    if (error) throw error;
+
+    // Return a confirmation object without reading the protected database row.
+    return {
       ...enquiry,
-      id: `enq-${Date.now()}`,
+      id: null,
       createdAt: new Date().toISOString(),
       status: 'New',
       notes: '',
-      repairProgress: enquiry.enquiryType?.includes('Repair') ? 'Received' : 'Not Applicable'
+      repairProgress: enquiry.enquiryType?.includes('Repair')
+        ? 'Received'
+        : 'Not Applicable'
     };
-    setDb((prev) => ({
-      ...prev,
-      enquiries: [newEnquiry, ...prev.enquiries]
-    }));
-    return newEnquiry;
+  }
+
+  const newEnquiry = {
+    ...enquiry,
+    id: `enq-${Date.now()}`,
+    createdAt: new Date().toISOString(),
+    status: 'New',
+    notes: '',
+    repairProgress: enquiry.enquiryType?.includes('Repair')
+      ? 'Received'
+      : 'Not Applicable'
   };
+
+  setDb((prev) => ({
+    ...prev,
+    enquiries: [newEnquiry, ...(prev.enquiries || [])]
+  }));
+
+  return newEnquiry;
+};
 
   const updateEnquiry = async (id, updates) => {
     if (supabase && (updates.status || updates.notes !== undefined)) {

@@ -41,20 +41,17 @@ export default function ContactPage() {
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState('');
-  const [emailSent, setEmailSent] = useState(false);
-  const [emailNotice, setEmailNotice] = useState('');
-  const [savedEnquiryId, setSavedEnquiryId] = useState(null);
 
   useEffect(() => {
     if (preselectedService) {
-      setFormData((prev) => ({
-        ...prev,
+      setFormData((previous) => ({
+        ...previous,
         enquiryType: 'Store Service',
         selectedProductOrService: preselectedService
       }));
     } else if (preselectedProduct) {
-      setFormData((prev) => ({
-        ...prev,
+      setFormData((previous) => ({
+        ...previous,
         enquiryType: 'Product Availability',
         selectedProductOrService: preselectedProduct
       }));
@@ -74,36 +71,44 @@ export default function ContactPage() {
     : `https://www.google.com/maps/search/?api=1&query=${encodedMapQuery}`;
 
   const validate = () => {
-    const errs = {};
+    const validationErrors = {};
+    const name = formData.customerName.trim();
+    const digits = formData.phone.replace(/\D/g, '');
+    const mobileDigits =
+      digits.length === 12 && digits.startsWith('91')
+        ? digits.slice(2)
+        : digits;
+    const email = formData.email.trim();
+    const message = formData.message.trim();
 
-    if (!formData.customerName.trim()) {
-      errs.customerName = 'Please enter your name';
+    if (Array.from(name).length < 6) {
+      validationErrors.customerName = 'Name must be at least 6 characters';
+    } else if (Array.from(name).length > 120) {
+      validationErrors.customerName = 'Name must be 120 characters or fewer';
     }
 
-    if (!formData.phone.trim()) {
-      errs.phone = 'Please enter a contact phone number';
-    } else if (formData.phone.replace(/[^0-9]/g, '').length < 10) {
-      errs.phone = 'Please enter a valid 10-digit mobile number';
+    if (!/^[6-9]\d{9}$/.test(mobileDigits)) {
+      validationErrors.phone = 'Enter a valid 10-digit mobile number';
     }
 
     if (
-      formData.email &&
-      !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)
+      email &&
+      (email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
     ) {
-      errs.email = 'Please enter a valid email address';
+      validationErrors.email = 'Please enter a valid email address';
     }
 
-    if (!formData.message.trim()) {
-      errs.message = 'Please write a brief enquiry message';
-    } else if (formData.message.trim().length > 2000) {
-      errs.message = 'Please keep your message under 2000 characters';
+    if (Array.from(message).length < 10) {
+      validationErrors.message = 'Message must be at least 10 characters';
+    } else if (Array.from(message).length > 2000) {
+      validationErrors.message = 'Please keep your message under 2000 characters';
     }
 
-    return errs;
+    return validationErrors;
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+  const handleSubmit = async (event) => {
+    event.preventDefault();
 
     if (isSubmitting) return;
 
@@ -115,62 +120,41 @@ export default function ContactPage() {
 
     setErrors({});
     setSubmitError('');
-    setEmailNotice('');
     setIsSubmitting(true);
 
     try {
-      // Save the enquiry first so it reaches the admin dashboard
-      // even if the email service is temporarily unavailable.
-      const saved = await addEnquiry(formData);
-      setSavedEnquiryId(saved.id);
-
       if (supabase && isSupabaseConfigured) {
-        try {
-          const { data, error } = await supabase.functions.invoke(
-            'send-enquiry',
-            {
-              body: {
-                customerName: formData.customerName.trim(),
-                phone: formData.phone.trim(),
-                email: formData.email.trim(),
-                enquiryType: formData.enquiryType,
-                selectedProductOrService:
-                  formData.selectedProductOrService.trim(),
-                message: formData.message.trim(),
-                website: honeypot
-              }
+        const { data, error } = await supabase.functions.invoke(
+          'send-enquiry',
+          {
+            body: {
+              customerName: formData.customerName.trim(),
+              phone: formData.phone.trim(),
+              email: formData.email.trim(),
+              enquiryType: formData.enquiryType,
+              selectedProductOrService:
+                formData.selectedProductOrService.trim(),
+              message: formData.message.trim(),
+              website: honeypot
             }
-          );
-
-          if (error || data?.success !== true) {
-            throw error || new Error(
-              data?.error || 'Email notification failed.'
-            );
           }
+        );
 
-          setEmailSent(true);
-        } catch (emailError) {
-          console.error(
-            'Enquiry was saved, but its email notification failed:',
-            emailError
-          );
-          setEmailSent(false);
-          setEmailNotice(
-            'Your enquiry is saved in the Admin Dashboard, but the email notification could not be sent.'
-          );
+        if (error) throw error;
+
+        if (data?.success !== true) {
+          throw new Error('Enquiry submission failed');
         }
       } else {
-        setEmailSent(false);
-        setEmailNotice(
-          'Your enquiry is saved in this browser, but email notifications require a configured Supabase connection.'
-        );
+        // Local-only fallback when Supabase is not configured.
+        await addEnquiry(formData);
       }
 
       setIsSubmitted(true);
     } catch (error) {
       console.error('Could not submit enquiry:', error);
       setSubmitError(
-        error.message || 'We could not save your enquiry. Please try again.'
+        'We could not submit your enquiry. Please check your details and try again.'
       );
     } finally {
       setIsSubmitting(false);
@@ -179,9 +163,9 @@ export default function ContactPage() {
 
   const resetForm = () => {
     setIsSubmitted(false);
-    setEmailSent(false);
-    setEmailNotice('');
+    setIsSubmitting(false);
     setSubmitError('');
+    setErrors({});
     setHoneypot('');
     setFormData({
       customerName: '',
@@ -293,9 +277,7 @@ export default function ContactPage() {
 
               <div className="mt-4 pt-3 border-top">
                 <a
-                  href={`https://wa.me/${
-                    contact.whatsapp?.replace(/[^0-9]/g, '') || ''
-                  }`}
+                  href={`https://wa.me/${contact.whatsapp?.replace(/[^0-9]/g, '') || ''}`}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="btn btn-outline-success w-100 d-flex align-items-center justify-content-center gap-2 fw-semibold"
@@ -369,40 +351,29 @@ export default function ContactPage() {
                     <CheckCircle2 size={48} />
                   </div>
 
-                  <h3 className="fw-bold text-dark mb-2">Enquiry Received!</h3>
+                  <h3 className="fw-bold text-dark mb-2">
+                    Enquiry Submitted
+                  </h3>
+
                   <p
                     className="text-muted small mb-4"
                     style={{ maxWidth: '440px', margin: '0 auto' }}
                   >
-                    Thank you, <strong>{formData.customerName}</strong>! Your
-                    enquiry has been received (ID: <code>{savedEnquiryId}</code>).
+                    Thank you, <strong>{formData.customerName}</strong>. Your
+                    enquiry has been submitted successfully. Our team will
+                    contact you soon.
                   </p>
 
-                  <div
-                    className={`alert ${
-                      emailNotice ? 'alert-warning' : 'alert-success'
-                    } py-2 px-3 small d-inline-block mb-4`}
+                  <button
+                    type="button"
+                    className="btn btn-brand-primary btn-sm px-4 py-2"
+                    onClick={resetForm}
                   >
-                    {isSupabaseConfigured
-                      ? 'Your enquiry is saved in the Supabase Admin Dashboard.'
-                      : 'Your enquiry is saved in this browser only.'}
-                    {emailSent && ' An email notification was sent to the shop.'}
-                    {emailNotice && ` ${emailNotice}`}
-                  </div>
-
-                  <div>
-                    <button
-                      type="button"
-                      className="btn btn-brand-primary btn-sm px-4 py-2"
-                      onClick={resetForm}
-                    >
-                      Submit Another Enquiry
-                    </button>
-                  </div>
+                    Submit Another Enquiry
+                  </button>
                 </div>
               ) : (
                 <form onSubmit={handleSubmit}>
-                  {/* Spam honeypot: hidden from people, but available to simple bots. */}
                   <div
                     aria-hidden="true"
                     style={{
@@ -459,15 +430,13 @@ export default function ContactPage() {
                         type="text"
                         maxLength={120}
                         required
-                        className={`form-control ${
-                          errors.customerName ? 'is-invalid' : ''
-                        }`}
+                        className={`form-control ${errors.customerName ? 'is-invalid' : ''}`}
                         placeholder="e.g. Ramesh Kumar"
                         value={formData.customerName}
-                        onChange={(e) =>
+                        onChange={(event) =>
                           setFormData({
                             ...formData,
-                            customerName: e.target.value
+                            customerName: event.target.value
                           })
                         }
                       />
@@ -490,13 +459,14 @@ export default function ContactPage() {
                         type="tel"
                         maxLength={40}
                         required
-                        className={`form-control ${
-                          errors.phone ? 'is-invalid' : ''
-                        }`}
+                        className={`form-control ${errors.phone ? 'is-invalid' : ''}`}
                         placeholder="e.g. +91 98410 12345"
                         value={formData.phone}
-                        onChange={(e) =>
-                          setFormData({ ...formData, phone: e.target.value })
+                        onChange={(event) =>
+                          setFormData({
+                            ...formData,
+                            phone: event.target.value
+                          })
                         }
                       />
                       {errors.phone && (
@@ -518,13 +488,14 @@ export default function ContactPage() {
                         id="email"
                         type="email"
                         maxLength={254}
-                        className={`form-control ${
-                          errors.email ? 'is-invalid' : ''
-                        }`}
+                        className={`form-control ${errors.email ? 'is-invalid' : ''}`}
                         placeholder="e.g. name@example.com"
                         value={formData.email}
-                        onChange={(e) =>
-                          setFormData({ ...formData, email: e.target.value })
+                        onChange={(event) =>
+                          setFormData({
+                            ...formData,
+                            email: event.target.value
+                          })
                         }
                       />
                       {errors.email && (
@@ -545,10 +516,10 @@ export default function ContactPage() {
                         id="enquiryType"
                         className="form-select"
                         value={formData.enquiryType}
-                        onChange={(e) =>
+                        onChange={(event) =>
                           setFormData({
                             ...formData,
-                            enquiryType: e.target.value
+                            enquiryType: event.target.value
                           })
                         }
                       >
@@ -587,10 +558,10 @@ export default function ContactPage() {
                         className="form-control"
                         placeholder="e.g. Samsung Galaxy model or cracked screen"
                         value={formData.selectedProductOrService}
-                        onChange={(e) =>
+                        onChange={(event) =>
                           setFormData({
                             ...formData,
-                            selectedProductOrService: e.target.value
+                            selectedProductOrService: event.target.value
                           })
                         }
                       />
@@ -609,15 +580,13 @@ export default function ContactPage() {
                         rows={4}
                         maxLength={2000}
                         required
-                        className={`form-control ${
-                          errors.message ? 'is-invalid' : ''
-                        }`}
+                        className={`form-control ${errors.message ? 'is-invalid' : ''}`}
                         placeholder="Describe what you are looking for or the fault symptoms."
                         value={formData.message}
-                        onChange={(e) =>
+                        onChange={(event) =>
                           setFormData({
                             ...formData,
-                            message: e.target.value
+                            message: event.target.value
                           })
                         }
                       />
@@ -646,8 +615,7 @@ export default function ContactPage() {
                         className="text-muted d-block text-center mt-2"
                         style={{ fontSize: '0.75rem' }}
                       >
-                        Your enquiry is saved for the store team. Email
-                        notification may also be sent.
+                        Our team will review your enquiry and contact you.
                       </small>
                     </div>
                   </div>

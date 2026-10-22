@@ -1,188 +1,166 @@
-# Muganiyaa-Mobiles — Frontend Demo Web Application
+# Muganiyaa Mobiles
 
-A modern, responsive, high-performance **catalogue and service enquiry web platform** built for **Muganiyaa-Mobiles**, an electronics and telecom retail shop offering smartphones, accessories, home appliances, device repairs, and SIM/recharge services.
+A responsive product catalogue and customer enquiry website for Muganiyaa Mobiles, an electronics and telecom retailer in Tenkasi. Customers can browse products and services, compare product variants, and contact the store. The owner can manage catalogue content and customer enquiries through a protected admin area.
 
-This project is a **100% frontend-only client presentation demo**. It runs entirely in the browser without requiring a live backend, database server, or external API keys, while providing realistic interactions, full persistence, and an interactive CMS admin panel.
+**Live website:** https://karuppasamy-arumugam.github.io/muganiya-mobiles-demo/
 
-🔗 **Live Website:** [https://karuppasamy-arumugam.github.io/muganiya-mobiles-demo/](https://karuppasamy-arumugam.github.io/muganiya-mobiles-demo/)  
-🔐 **Admin Portal:** [https://karuppasamy-arumugam.github.io/muganiya-mobiles-demo/#/store-owner-7f3c9a2e6b41d805/login](https://karuppasamy-arumugam.github.io/muganiya-mobiles-demo/#/store-owner-7f3c9a2e6b41d805/login) (User: `admin` | Pass: `admin123`)
+## Features
 
----
+### Public website
 
-## 🌟 Key Highlights & Architectural Features
+- Product catalogue with category, brand, price, and availability details
+- Product pages with images, specifications, colours, and supported variants
+- Search, filters, and wishlist
+- Store services, offers, banners, and contact information
+- Enquiry forms and direct call or WhatsApp links
+- Store location and map link
+- AI assistant for questions about the catalogue and store
 
-- **Catalogue & Enquiry Focused:** Designed specifically as an enquiry-driven platform — **No shopping cart**, **no online payments**, and **no customer registration**.
-- **Slide-Out Wishlist Drawer:** Customer wishlist opens gracefully from the right edge with a live counter badge, persists selections across page refreshes via `localStorage`, and provides direct WhatsApp prefilled enquiry links.
-- **Multi-Variant Product Details:** Real-time RAM/Storage selection, color swatches, dynamic price and stock status calculation, photo gallery with interactive zoom preview, category-specific tech specs, and matching promotional offers.
-- **Local Persistence Architecture:**
-  - `localStorage` for products catalogue, banners, active offers, contact settings, enquiries, and wishlist IDs.
-  - `IndexedDB` (`muganiyaa_db` / `product_images`) for uploaded product images to bypass browser 5MB `localStorage` limits.
-  - Reset to Default Seed Data anytime with a single click in the Admin settings.
-- **Simulated "Muganiyaa Assistant" Chatbot:**
-  - Offline NLP search engine that matches customer queries against live catalogue inventory, active discounts, repair estimates, and contact details.
-  - Renders rich, interactive, clickable product cards directly inside the chat window.
-- **Comprehensive Shop Owner CMS Admin Panel (`/store-owner-7f3c9a2e6b41d805`):**
-  - Protected route with 1-click demo login (`admin` / `admin123`).
-  - **8-Tab Product Editor:** Basic info, Media/Image uploader, Multi-color & RAM/Storage variants with custom pricing, Category specs, Key highlights, Linked offers, and Visibility toggle (Active/Draft/Featured).
-  - **Enquiry Manager:** View contact messages, repair service requests, change repair stages (`Received` ➔ `Diagnosing` ➔ `In Repair` ➔ `Ready for Pickup` ➔ `Delivered`), and save internal staff notes.
-  - **Offer & Hero Banner Manager:** Schedule discounts, bank offers, and homepage carousel slides.
-  - **Services & Content Manager:** Edit repair service cards, telecom perks, and store policies.
-- **Brand System:**
-  - Primary Crimson Red: `#B72E35`
-  - Deep Hover Red: `#96232A`
-  - Soft Blush Tint: `#FBECE9`
-  - Charcoal Text: `#29252A`
-  - Warm White / Off-white: `#FAF7F7` & `#FFFFFF`
-  - Google Font: **Manrope**
+### Admin area
 
----
+The owner portal is available at:
 
-## 🚀 Tech Stack
+`/#/store-owner-7f3c9a2e6b41d805/login`
 
-- **Framework:** [React 19](https://react.dev/)
-- **Build Tool:** [Vite 8](https://vitejs.dev/) with Rolldown manual chunk splitting
-- **Routing:** [React Router DOM v7](https://reactrouter.com/) (configured with `HashRouter` for zero-config GitHub Pages compatibility)
-- **UI & Layout:** [Bootstrap 5](https://getbootstrap.com/) Grid & Utilities + Handcrafted CSS Custom Properties
-- **Icons:** [Lucide React](https://lucide.dev/)
-- **Storage:** Browser `localStorage` + HTML5 `IndexedDB` API
+The route name is not a security control. Access must be protected by Supabase authentication, authorization checks, and Row Level Security policies.
 
----
+Admin features include product, category, brand, offer, banner, service, website-content, contact-detail, and enquiry management.
 
-## 📁 Project Structure
+## Technology
+
+- React
+- Vite
+- React Router with hash-based routing
+- Supabase: PostgreSQL, Auth, Storage, Realtime, and Edge Functions
+- Gemini API for the AI assistant
+- Web3Forms for enquiry email notifications
+- Bootstrap utilities and custom CSS
+- Lucide React icons
+
+## Project structure
 
 ```text
-Muganiyaa-Demo/
-├── public/
-│   ├── favicon.svg             # Custom crimson brand favicon
-│   └── 404.html                # SPA redirect handler for static hosts
+.
+├── public/                       # Static assets and hosting files
 ├── src/
 │   ├── components/
-│   │   ├── BrandLogo.jsx       # Reusable SVG brand icon & wordmark
-│   │   ├── FloatingActions.jsx # Floating quick-actions & simulated AI Chatbot
-│   │   ├── Footer.jsx          # Rich store footer with links & operating hours
-│   │   ├── Header.jsx          # Top announcement bar with live phone/WhatsApp
-│   │   ├── Navbar.jsx          # Main navigation bar with sticky wishlist badge
-│   │   ├── ProductCard.jsx     # Reusable card with stock status & wishlist toggle
-│   │   └── WishlistDrawer.jsx  # Slide-over right drawer with direct enquiry links
-│   ├── context/
-│   │   ├── AuthContext.jsx     # Admin session authentication state
-│   │   ├── DataContext.jsx     # Centralized reactive catalogue, offers, & enquiries
-│   │   └── WishlistContext.jsx # Customer wishlist ID store with localStorage sync
+│   │   ├── admin/                # Admin layout and shared admin components
+│   │   └── common/               # Header, footer, product cards, floating actions
+│   ├── context/                  # Authentication, catalogue, and wishlist state
 │   ├── pages/
-│   │   ├── AboutPage.jsx       # Store background, customer promise, & team
-│   │   ├── CategoriesPage.jsx  # Multi-category catalogue with price filter
-│   │   ├── ContactPage.jsx     # Store location, interactive enquiry form, & map
-│   │   ├── HomePage.jsx        # Hero carousel, launches, services, & reviews
-│   │   ├── MobilesPage.jsx     # Dedicated mobile phone catalogue with filters
-│   │   ├── PrivacyPage.jsx     # Customer privacy and store policy
-│   │   ├── ProductDetailsPage.jsx # Multi-variant gallery & specifications
-│   │   └── admin/
-│   │       ├── AdminBanners.jsx      # Hero banner management
-│   │       ├── AdminCategories.jsx   # Category listing & icon editor
-│   │       ├── AdminChatbot.jsx      # Chatbot FAQ and preset management
-│   │       ├── AdminContact.jsx      # Store address, phone, WhatsApp settings
-│   │       ├── AdminContent.jsx      # About and policy text editor
-│   │       ├── AdminDashboard.jsx    # Overview metrics & recent activity
-│   │       ├── AdminDemoSettings.jsx # 1-click restore default demo catalogue
-│   │       ├── AdminEnquiries.jsx    # Customer enquiries & repair stage tracker
-│   │       ├── AdminLayout.jsx       # Admin sidebar & header layout
-│   │       ├── AdminLoginPage.jsx    # Owner authentication screen
-│   │       ├── AdminOffers.jsx       # Festive and bank discount editor
-│   │       ├── AdminProductEditor.jsx# 8-tab comprehensive product CMS editor
-│   │       ├── AdminProducts.jsx     # Inventory table with search & bulk actions
-│   │       └── AdminServices.jsx     # Repair and telecom service cards
-│   ├── services/
-│   │   ├── chatbotService.js   # Offline keyword & intent matcher engine
-│   │   ├── indexedDbService.js # High-capacity image blob storage
-│   │   ├── seedData.js         # Comprehensive retail catalog (phones, appliances, etc.)
-│   │   └── storageService.js   # Versioned localStorage abstraction layer
-│   ├── App.jsx                 # Routes configuration (public & protected admin)
-│   ├── index.css               # Brand variables, modern UI components, animations
-│   └── main.jsx                # Application root mounting
-├── index.html                  # HTML entry point with Manrope font links
-├── package.json                # Dependencies and scripts
-└── vite.config.js              # Vite configuration with chunk optimization
+│   │   ├── admin/                # Admin screens
+│   │   └── public/               # Customer-facing pages
+│   ├── services/                 # Supabase, catalogue, and browser storage services
+│   ├── App.jsx                   # Application routes
+│   └── main.jsx                  # Application entry point
+├── supabase/
+│   ├── functions/                # Edge Functions
+│   └── migrations/               # Database schema changes
+├── package.json
+└── vite.config.js
 ```
 
----
+## Run locally
 
-## 💻 Getting Started Locally
+### Prerequisites
 
-### 1. Prerequisites
-- **Node.js** (v18.0.0 or higher recommended)
-- **npm** (comes bundled with Node.js)
+- Node.js and npm
+- Supabase CLI
+- Docker, if running Supabase locally
 
-### 2. Installation
-Clone the repository and install dependencies:
+### Install dependencies
+
 ```bash
-git clone https://github.com/Karuppasamy-Arumugam/muganiya-mobiles-demo.git
-cd muganiya-mobiles-demo
+git clone https://github.com/Karuppasamy-Arumugam/muganiyaa-mobiles.git
+cd muganiyaa-mobiles
 npm install
 ```
 
-### 3. Start Development Server
+### Configure the frontend
+
+Create `.env.local` in the project root:
+
+```env
+VITE_SUPABASE_URL=your_supabase_project_url
+VITE_SUPABASE_ANON_KEY=your_supabase_publishable_or_anon_key
+```
+
+Use the project URL and publishable/anon key from Supabase project settings. These frontend values are visible in the built website; protect data with correct Row Level Security policies. Never put a Supabase service-role key or provider API key in a `VITE_` variable.
+
+### Start the app
+
 ```bash
 npm run dev
 ```
-The app will launch at `http://localhost:5173/`. Open it in any modern browser.
 
-### 4. Build for Production
+Vite will print the local address to open in your browser.
+
+## Supabase setup
+
+Apply the migrations to the intended Supabase project and confirm that required tables, policies, storage buckets, and Edge Functions are configured.
+
+For local development, start Supabase with the CLI:
+
+```bash
+npx supabase start
+```
+
+To serve the AI assistant locally with its secrets, create `supabase/functions/.env`:
+
+```env
+GEMINI_API_KEY=your_gemini_api_key
+WEB3FORMS_ACCESS_KEY=your_web3forms_access_key
+```
+
+Do not commit this file. Keep provider secrets in the Edge Function environment, not in frontend code.
+
+Serve the functions locally:
+
+```bash
+npx supabase functions serve muganiyaa-assistant --env-file supabase/functions/.env
+```
+
+The enquiry email function is named `send-enquiry`. Configure its required secrets in the same protected function environment if it uses them.
+
+For a hosted Supabase project, set the function secrets in that project’s Edge Function settings or with the Supabase CLI. Deploy the functions to the linked project using the CLI. Do not deploy local `.env` files or commit secret values.
+
+## Build
+
+Create the production build:
+
 ```bash
 npm run build
 ```
-This produces an optimized, minified production build in the `dist/` directory.
 
-### 5. Preview Production Build
+Preview the generated build locally:
+
 ```bash
 npm run preview
 ```
 
----
+Deploy the `dist/` output using the hosting provider configured for this repository. For GitHub Pages, verify that the Vite base path and deployment workflow match the repository name, and that the production frontend environment points to the hosted Supabase project rather than a local URL.
 
-## 🔐 Admin Panel Access
+## Security and operations
 
-The administrative dashboard allows the shop owner to manage inventory, change banners, review enquiries, and update business contact details.
+- Do not store real credentials in this README or in source control.
+- Keep Gemini and Web3Forms keys in server-side Edge Function secrets.
+- Use only the Supabase publishable/anon key in frontend configuration.
+- Protect admin data with Supabase Auth, server-side authorization, and Row Level Security.
+- Do not grant public users permission to read customer enquiries.
+- Validate and rate-limit public enquiry and AI requests on the server.
+- Restrict production Auth redirect URLs to the real website domains.
+- Disable public account registration if the store only needs owner-managed accounts.
+- Keep database migrations in source control and apply them to production before deploying code that depends on them.
+- Rotate any key that was included in a shared archive, screenshot, or public repository.
 
-- **URL:** `http://localhost:5173/#/store-owner-7f3c9a2e6b41d805/login` (or click **Owner Portal** in the website footer).
-- **Demo Username:** `admin`
-- **Demo Password:** `admin123`
-- **Quick Access:** Click the **"Fill Demo Credentials"** button on the login screen for instant 1-click access.
+## Customer enquiries
 
----
+Enquiry submissions are stored in Supabase and may trigger an email notification through the configured email service. Email delivery depends on the Edge Function secrets and provider configuration. Verify both database storage and email delivery in the target environment before launch.
 
-## 💬 Testing Customer Enquiries & WhatsApp Flow
+## Scope
 
-1. Browse to any product (e.g. *Samsung Galaxy S24 Ultra* or *Prestige Induction Cooktop*).
-2. Click **"Enquire on WhatsApp"**: A WhatsApp link opens with the exact item name, variant, and store contact pre-populated.
-3. Open the **Contact** or **Services** page and submit an enquiry form.
-4. Log into the **Admin Panel** ➔ Navigate to **Customer Enquiries** to see your submitted message instantly.
-5. Update the repair stage or add internal staff notes.
+This website supports product discovery and store enquiries. It does not provide an online checkout or payment flow unless those features are added separately.
 
----
+## License
 
-## 🔮 Future Production Architecture & Backend Migration
-
-When transforming this demo into a production backend-backed system, follow this recommended roadmap:
-
-### 1. Recommended Backend Stack
-- **API Framework:** Django REST Framework (Python) or Express / Nest.js (Node.js/TypeScript)
-- **Database:** PostgreSQL (for relational data: products, variants, orders, customer logs)
-- **Cache & Message Broker:** Redis (for session management and rate limiting)
-- **Media Storage:** Cloudinary or AWS S3 (for product photos and banner assets)
-
-### 2. Live AI Chatbot Integration (Groq / Gemini)
-To replace the offline simulated chatbot with a production LLM agent:
-1. Create a backend proxy endpoint `/api/chat/` to keep API keys secure.
-2. Initialize Groq (`llama-3.3-70b-versatile`) or Google Gemini (`gemini-2.5-flash`).
-3. Inject shop catalogue context and operating policies into the system prompt.
-4. Stream responses back via Server-Sent Events (SSE).
-
-### 3. Real-Time Customer Notifications
-- Use **Twilio WhatsApp Business API** or **Gupshup** to trigger automated WhatsApp receipts when a customer registers a repair enquiry.
-- Webhook updates to notify customers when repair status moves to `Ready for Pickup`.
-
----
-
-## 📄 License
-
-This project is proprietary and created for presentation and demonstration purposes for **Muganiyaa-Mobiles**.
+This project is proprietary and intended for Muganiyaa Mobiles. Do not reuse or redistribute its branding, store content, or customer data without permission.
