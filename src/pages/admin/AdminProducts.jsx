@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import {
+  Package,
   Plus,
   Search,
   Edit,
@@ -8,12 +9,11 @@ import {
   ExternalLink,
   Eye,
   EyeOff,
-  RefreshCw
 } from 'lucide-react';
 import { useData } from '../../context/DataContext';
 
 export default function AdminProducts() {
-  const { db, updateProduct, deleteProduct } = useData();
+  const { db, updateProduct, deleteProduct, isLoading = false, loadError = null } = useData();
 
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
@@ -22,34 +22,36 @@ export default function AdminProducts() {
   const [actionError, setActionError] = useState('');
   const [deleteError, setDeleteError] = useState('');
   const [isDeleting, setIsDeleting] = useState(false);
+  const [updatingProductId, setUpdatingProductId] = useState(null);
 
-  const categories = db.categories || [];
-  const products = db.products || [];
+  const safeDb = db && typeof db === 'object' ? db : {};
+  const categories = Array.isArray(safeDb.categories) ? safeDb.categories : [];
+  const products = Array.isArray(safeDb.products) ? safeDb.products : [];
 
   // Filtered Products List
   const filteredProducts = useMemo(() => {
-    return products.filter((p) => {
-      // Category
-      if (selectedCategory !== 'all' && p.categorySlug !== selectedCategory) {
+    const query = searchTerm.trim().toLowerCase();
+
+    return products.filter((product) => {
+      if (!product || typeof product !== 'object') return false;
+      if (selectedCategory !== 'all' && product.categorySlug !== selectedCategory) {
         return false;
       }
-      // Status
-      if (selectedStatus !== 'all' && p.status !== selectedStatus) {
+      if (selectedStatus !== 'all' && product.status !== selectedStatus) {
         return false;
       }
-      // Search Term
-      if (searchTerm.trim()) {
-        const q = searchTerm.toLowerCase();
-        const matchName = p.name?.toLowerCase().includes(q);
-        const matchBrand = p.brand?.toLowerCase().includes(q);
-        const matchModel = p.model?.toLowerCase().includes(q);
-        if (!matchName && !matchBrand && !matchModel) return false;
+      if (query) {
+        const fields = [product.name, product.brand, product.model]
+          .map((value) => String(value || '').toLowerCase());
+        if (!fields.some((value) => value.includes(query))) return false;
       }
       return true;
     });
   }, [products, selectedCategory, selectedStatus, searchTerm]);
 
   const togglePublishStatus = async (product) => {
+    if (updatingProductId || !product?.id) return;
+    setUpdatingProductId(product.id);
     const nextStatus = product.status === 'published' ? 'draft' : 'published';
     setActionError('');
 
@@ -58,6 +60,8 @@ export default function AdminProducts() {
     } catch (error) {
       console.error('Could not update product visibility:', error);
       setActionError(error.message || 'Could not update product visibility.');
+    } finally {
+      setUpdatingProductId(null);
     }
   };
 
@@ -81,6 +85,15 @@ export default function AdminProducts() {
       setIsDeleting(false);
     }
   };
+
+  if (isLoading) {
+    return (
+      <div className="py-5 d-flex align-items-center justify-content-center gap-2 text-muted" role="status" aria-live="polite">
+        <span className="spinner-border spinner-border-sm" aria-hidden="true" />
+        <span>Loading products…</span>
+      </div>
+    );
+  }
 
   return (
     <div className="admin-products">
@@ -114,6 +127,7 @@ export default function AdminProducts() {
                 placeholder="Search products by model, name, or brand..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
+                aria-label="Search products by name, brand, or model"
               />
             </div>
           </div>
@@ -156,19 +170,44 @@ export default function AdminProducts() {
         </div>
       </div>
 
-      {(actionError || deleteError) && (
-        <div className="alert alert-danger" role="alert">
-          {deleteError || actionError}
+      {(actionError || loadError) && (
+        <div className="alert alert-danger" role="alert" aria-live="assertive">
+          {actionError || (loadError ? 'Product data could not be loaded. Refresh the page and try again.' : '')}
         </div>
       )}
 
       {/* Products Table */}
       <div className="card border rounded-4 bg-white shadow-sm overflow-hidden" style={{ borderColor: 'var(--border-color)' }}>
         {filteredProducts.length === 0 ? (
-          <div className="p-5 text-center">
-            <RefreshCw size={36} className="text-muted mb-2" />
-            <h6 className="fw-bold mb-1">No products match this filter</h6>
-            <p className="text-muted small mb-0">Try clearing your search query or selecting "All Categories".</p>
+                    <div className="p-5 text-center">
+            {products.length === 0 ? (
+              <>
+                <Package size={36} className="text-muted mb-2" aria-hidden="true" />
+                <h6 className="fw-bold mb-1">No products added yet</h6>
+                <p className="text-muted small mb-3">Add a product to start building your store catalogue.</p>
+                <Link to="/store-owner-7f3c9a2e6b41d805/products/new" className="btn btn-brand-primary btn-sm">
+                  <Plus size={15} className="me-1" />
+                  Add New Product
+                </Link>
+              </>
+            ) : (
+              <>
+                <Search size={36} className="text-muted mb-2" aria-hidden="true" />
+                <h6 className="fw-bold mb-1">No products match these filters</h6>
+                <p className="text-muted small mb-3">Change your search or filters to see more products.</p>
+                <button
+                  type="button"
+                  className="btn btn-outline-secondary btn-sm"
+                  onClick={() => {
+                    setSearchTerm('');
+                    setSelectedCategory('all');
+                    setSelectedStatus('all');
+                  }}
+                >
+                  Clear filters
+                </button>
+              </>
+            )}
           </div>
         ) : (
           <div className="table-responsive">
@@ -187,6 +226,7 @@ export default function AdminProducts() {
               <tbody>
                 {filteredProducts.map((p) => {
                   const isPublished = p.status === 'published';
+                  const colors = Array.isArray(p.colors) ? p.colors : [];
                   return (
                     <tr key={p.id}>
                       {/* Image Thumbnail */}
@@ -215,9 +255,9 @@ export default function AdminProducts() {
                         <div className="text-muted small">
                           Model: {p.model || 'Standard'} {p.tagline ? `• ${p.tagline}` : ''}
                         </div>
-                        {p.colors && p.colors.length > 0 && (
+                        {colors.length > 0 && (
                           <div className="d-flex align-items-center gap-1 mt-1">
-                            {p.colors.map((col, idx) => (
+                            {colors.map((col, idx) => (
                               <span
                                 key={idx}
                                 className="rounded-circle border d-inline-block"
@@ -226,7 +266,7 @@ export default function AdminProducts() {
                               />
                             ))}
                             <small className="text-muted ms-1" style={{ fontSize: '0.72rem' }}>
-                              ({p.colors.length} {p.colors.length === 1 ? 'colour' : 'colours'})
+                              ({colors.length} {colors.length === 1 ? 'colour' : 'colours'})
                             </small>
                           </div>
                         )}
@@ -271,10 +311,12 @@ export default function AdminProducts() {
                             isPublished ? 'btn-success-subtle text-success border-success' : 'btn-light text-muted border'
                           }`}
                           onClick={() => togglePublishStatus(p)}
+                          disabled={Boolean(updatingProductId)}
+                          aria-label={isPublished ? "Unpublish product" : "Publish product"}
                           title={`Click to ${isPublished ? 'Unpublish' : 'Publish'}`}
                         >
                           {isPublished ? <Eye size={14} /> : <EyeOff size={14} />}
-                          <span className="small fw-semibold">{isPublished ? 'Published' : 'Draft'}</span>
+                          <span className="small fw-semibold">{updatingProductId === p.id ? 'Saving…' : isPublished ? 'Published' : 'Draft'}</span>
                         </button>
                       </td>
 
@@ -304,7 +346,7 @@ export default function AdminProducts() {
                           <button
                             type="button"
                             className="btn btn-outline-danger btn-sm p-1"
-                            onClick={() => setProductToDelete(p)}
+                            onClick={() => { setDeleteError(''); setProductToDelete(p); }}
                             title="Delete Product"
                           >
                             <Trash2 size={14} />
@@ -322,12 +364,12 @@ export default function AdminProducts() {
 
       {/* Delete Confirmation Modal */}
       {productToDelete && (
-        <div className="modal show d-block" style={{ backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 1060 }} role="dialog">
+        <div className="modal show d-block" style={{ backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 1060 }} role="dialog" aria-modal="true" aria-labelledby="deleteProductTitle">
           <div className="modal-dialog modal-dialog-centered">
             <div className="modal-content">
               <div className="modal-header">
-                <h5 className="modal-title fw-bold text-danger">Confirm Removal</h5>
-                <button type="button" className="btn-close" onClick={() => setProductToDelete(null)} />
+                <h5 id="deleteProductTitle" className="modal-title fw-bold text-danger">Confirm Removal</h5>
+                <button type="button" className="btn-close" aria-label="Close delete confirmation" disabled={isDeleting} onClick={() => setProductToDelete(null)} />
               </div>
               <div className="modal-body">
                 <p>
@@ -338,7 +380,7 @@ export default function AdminProducts() {
                 </small>
               </div>
               {deleteError && (
-                <div className="alert alert-danger mx-3 mb-0" role="alert">
+                <div className="alert alert-danger mx-3 mb-0" role="alert" aria-live="assertive">
                   {deleteError}
                 </div>
               )}
@@ -357,5 +399,9 @@ export default function AdminProducts() {
     </div>
   );
 }
+
+
+
+
 
 

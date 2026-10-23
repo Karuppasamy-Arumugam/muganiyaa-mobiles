@@ -3,37 +3,73 @@ import { loadWishlistIds, saveWishlistIds } from '../services/storageService';
 
 const WishlistContext = createContext(null);
 
+function isValidProductId(productId) {
+  return (
+    (typeof productId === 'string' && productId.trim().length > 0) ||
+    (typeof productId === 'number' && Number.isFinite(productId))
+  );
+}
+
+function normalizeWishlistIds(ids) {
+  if (!Array.isArray(ids)) return [];
+
+  const uniqueIds = [];
+  const seenIds = new Set();
+
+  for (const productId of ids) {
+    if (!isValidProductId(productId) || seenIds.has(productId)) continue;
+    seenIds.add(productId);
+    uniqueIds.push(productId);
+  }
+
+  return uniqueIds;
+}
+
+function readWishlistIds() {
+  try {
+    return normalizeWishlistIds(loadWishlistIds());
+  } catch (error) {
+    console.warn('Could not load the saved wishlist.', error);
+    return [];
+  }
+}
+
 export function WishlistProvider({ children }) {
-  const [wishlistIds, setWishlistIds] = useState(() => loadWishlistIds());
+  const [wishlistIds, setWishlistIds] = useState(readWishlistIds);
   const [isWishlistOpen, setIsWishlistOpen] = useState(false);
 
   useEffect(() => {
-    saveWishlistIds(wishlistIds);
+    try {
+      saveWishlistIds(wishlistIds);
+    } catch (error) {
+      console.warn('Could not save the wishlist on this device.', error);
+    }
   }, [wishlistIds]);
 
   const openWishlist = () => setIsWishlistOpen(true);
   const closeWishlist = () => setIsWishlistOpen(false);
 
   const toggleWishlist = (productId) => {
-    setWishlistIds((prev) => {
-      const exists = prev.includes(productId);
-      if (exists) {
-        return prev.filter((id) => id !== productId);
-      } else {
-        return [...prev, productId];
-      }
+    if (!isValidProductId(productId)) return;
+
+    setWishlistIds((currentIds) => {
+      const safeIds = normalizeWishlistIds(currentIds);
+      return safeIds.includes(productId)
+        ? safeIds.filter((id) => id !== productId)
+        : [...safeIds, productId];
     });
   };
 
   const removeFromWishlist = (productId) => {
-    setWishlistIds((prev) => prev.filter((id) => id !== productId));
+    if (!isValidProductId(productId)) return;
+    setWishlistIds((currentIds) =>
+      normalizeWishlistIds(currentIds).filter((id) => id !== productId)
+    );
   };
 
-  const clearWishlist = () => {
-    setWishlistIds([]);
-  };
-
-  const isInWishlist = (productId) => wishlistIds.includes(productId);
+  const clearWishlist = () => setWishlistIds([]);
+  const isInWishlist = (productId) =>
+    isValidProductId(productId) && wishlistIds.includes(productId);
 
   const value = {
     wishlistIds,
@@ -47,7 +83,11 @@ export function WishlistProvider({ children }) {
     isInWishlist
   };
 
-  return <WishlistContext.Provider value={value}>{children}</WishlistContext.Provider>;
+  return (
+    <WishlistContext.Provider value={value}>
+      {children}
+    </WishlistContext.Provider>
+  );
 }
 
 export function useWishlist() {

@@ -1,5 +1,6 @@
 import React from 'react';
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
+
 import Header from './components/common/Header';
 import Navbar from './components/common/Navbar';
 import Footer from './components/common/Footer';
@@ -13,6 +14,8 @@ import ProductDetailsPage from './pages/public/ProductDetailsPage';
 import AboutPage from './pages/public/AboutPage';
 import ContactPage from './pages/public/ContactPage';
 import PrivacyPage from './pages/public/PrivacyPage';
+import NotFoundPage from './pages/public/NotFoundPage';
+import OffersPage from './pages/public/OffersPage';
 
 import AdminLoginPage from './pages/admin/AdminLoginPage';
 import AdminLayout from './components/admin/AdminLayout';
@@ -28,6 +31,7 @@ import AdminContent from './pages/admin/AdminContent';
 import AdminContact from './pages/admin/AdminContact';
 import AdminChatbot from './pages/admin/AdminChatbot';
 import AdminDemoSettings from './pages/admin/AdminDemoSettings';
+
 import { useAuth } from './context/AuthContext';
 
 const ADMIN_PATH = '/store-owner-7f3c9a2e6b41d805';
@@ -53,7 +57,10 @@ function ProtectedAdminRoute({ children }) {
 
 export default function App() {
   const location = useLocation();
-  const isAdminRoute = location.pathname.startsWith(ADMIN_PATH);
+
+  const isAdminRoute =
+    location.pathname === ADMIN_PATH ||
+    location.pathname.startsWith(`${ADMIN_PATH}/`);
 
   return (
     <div className="app-root d-flex flex-column min-vh-100">
@@ -66,6 +73,7 @@ export default function App() {
 
       <div className="flex-grow-1">
         <Routes>
+          {/* Public pages */}
           <Route path="/" element={<HomePage />} />
           <Route path="/mobiles" element={<MobilesPage />} />
           <Route path="/categories" element={<CategoriesPage />} />
@@ -73,9 +81,12 @@ export default function App() {
           <Route path="/about" element={<AboutPage />} />
           <Route path="/contact" element={<ContactPage />} />
           <Route path="/privacy" element={<PrivacyPage />} />
+          <Route path="/offers" element={<OffersPage />} />
 
+          {/* Admin sign-in */}
           <Route path={ADMIN_LOGIN_PATH} element={<AdminLoginPage />} />
 
+          {/* Protected admin pages */}
           <Route
             path={ADMIN_PATH}
             element={
@@ -99,7 +110,8 @@ export default function App() {
             <Route path="demo" element={<AdminDemoSettings />} />
           </Route>
 
-          <Route path="*" element={<Navigate to="/" replace />} />
+          {/* Unknown URLs */}
+          <Route path="*" element={<NotFoundPage />} />
         </Routes>
       </div>
 

@@ -405,6 +405,7 @@ export default function AdminProductEditor() {
 
           combinations.push({
             color: color.name,
+            colorHex: String(color.hex || '').trim().toUpperCase(),
             ram,
             storage,
             variantAttributes,
@@ -448,11 +449,41 @@ export default function AdminProductEditor() {
     setSaveError('');
     setSaveSuccess(false);
 
-    const invalidColor = (formData.colors || []).some(
-      (color) => !/^#[0-9A-Fa-f]{6}$/.test(String(color.hex || '').trim())
+    const normalizedColors = (Array.isArray(formData.colors) ? formData.colors : [])
+      .map((color) => ({
+        ...color,
+        name: String(color.name || '').trim(),
+        hex: String(color.hex || '').trim().toUpperCase()
+      }));
+
+    const hexByColorName = new Map(
+      normalizedColors.map((color) => [color.name.toLowerCase(), color.hex])
     );
+
+    const normalizedVariants = (Array.isArray(formData.variants) ? formData.variants : [])
+      .map((variant) => {
+        const colorName = String(variant.color || '').trim();
+        const matchingHex = hexByColorName.get(colorName.toLowerCase());
+
+        return {
+          ...variant,
+          color: colorName,
+          colorHex: String(matchingHex || variant.colorHex || '').trim().toUpperCase()
+        };
+      });
+
+    const invalidColor =
+      normalizedColors.some(
+        (color) => !color.name || !/^#[0-9A-F]{6}$/.test(color.hex)
+      ) ||
+      normalizedVariants.some(
+        (variant) => !variant.color || !/^#[0-9A-F]{6}$/.test(variant.colorHex)
+      );
+
     if (invalidColor) {
-      setSaveError('Every product color needs a valid six-digit hex code, such as #F1AFB5.');
+      setSaveError(
+        'Every product colour and variant needs a valid six-digit hex code, such as #F1AFB5. Regenerate the variant matrix after changing colours.'
+      );
       return;
     }
 
@@ -460,6 +491,8 @@ export default function AdminProductEditor() {
 
     const productPayload = {
       ...formData,
+      colors: normalizedColors,
+      variants: normalizedVariants,
       status: targetStatus,
       sellingPrice: Number(formData.sellingPrice),
       originalPrice: Number(formData.originalPrice),

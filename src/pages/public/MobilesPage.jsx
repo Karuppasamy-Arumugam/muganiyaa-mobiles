@@ -16,6 +16,10 @@ function normalize(value) {
   return String(value || '').trim().toLowerCase();
 }
 
+function asArray(value) {
+  return Array.isArray(value) ? value : [];
+}
+
 function formatPrice(value) {
   return Number(value || 0).toLocaleString('en-IN');
 }
@@ -131,7 +135,12 @@ function FilterChoices({
 }
 
 export default function MobilesPage() {
-  const { publishedProducts = [], db = {} } = useData();
+  const {
+    publishedProducts: productsFromStore = [],
+    db = {},
+    catalogLoading = false,
+    catalogError = ''
+  } = useData();
   const [searchParams, setSearchParams] = useSearchParams();
 
   const selectedBrand = searchParams.get('brand') || 'All Brands';
@@ -144,8 +153,12 @@ export default function MobilesPage() {
   const [isFilterDrawerOpen, setIsFilterDrawerOpen] = useState(false);
   const [visibleCount, setVisibleCount] = useState(INITIAL_VISIBLE_COUNT);
 
-  const contact = db.contactSettings || {};
-  const whyChooseUs = db.websiteContent?.whyChooseUs || [];
+  const publishedProducts = Array.isArray(productsFromStore)
+    ? productsFromStore.filter((product) => product && typeof product === 'object')
+    : [];
+  const safeDb = db && typeof db === 'object' ? db : {};
+  const contact = safeDb.contactSettings || {};
+  const whyChooseUs = asArray(safeDb.websiteContent?.whyChooseUs);
 
   const allMobiles = useMemo(() => {
     return publishedProducts.filter((product) => {
@@ -176,8 +189,8 @@ export default function MobilesPage() {
 
   const ramOptions = useMemo(() => {
     const values = allMobiles.flatMap((product) => [
-      ...(product.ramOptions || []),
-      ...(product.variants || []).map((variant) => variant.ram)
+      ...asArray(product.ramOptions),
+      ...asArray(product.variants).map((variant) => variant.ram)
     ]);
 
     return Array.from(new Set(values.map((value) => String(value || '').trim()).filter(Boolean)))
@@ -186,8 +199,8 @@ export default function MobilesPage() {
 
   const storageOptions = useMemo(() => {
     const values = allMobiles.flatMap((product) => [
-      ...(product.storageOptions || []),
-      ...(product.variants || []).map((variant) => variant.storage)
+      ...asArray(product.storageOptions),
+      ...asArray(product.variants).map((variant) => variant.storage)
     ]);
 
     return Array.from(new Set(values.map((value) => String(value || '').trim()).filter(Boolean)))
@@ -269,8 +282,8 @@ export default function MobilesPage() {
 
         if (selectedRams.length > 0) {
           const productRams = [
-            ...(product.ramOptions || []),
-            ...(product.variants || []).map((variant) => variant.ram)
+            ...asArray(product.ramOptions),
+            ...asArray(product.variants).map((variant) => variant.ram)
           ].map(normalize);
 
           if (!selectedRams.some((ram) => productRams.includes(normalize(ram)))) {
@@ -280,8 +293,8 @@ export default function MobilesPage() {
 
         if (selectedStorages.length > 0) {
           const productStorages = [
-            ...(product.storageOptions || []),
-            ...(product.variants || []).map((variant) => variant.storage)
+            ...asArray(product.storageOptions),
+            ...asArray(product.variants).map((variant) => variant.storage)
           ].map(normalize);
 
           if (
@@ -367,8 +380,11 @@ export default function MobilesPage() {
               </p>
             </div>
             <div className="badge-blush align-self-start align-self-md-auto">
-              {filteredProducts.length}{' '}
-              {filteredProducts.length === 1 ? 'phone' : 'phones'} available
+              {catalogLoading
+                ? 'Loading phones…'
+                : catalogError
+                  ? 'Catalogue unavailable'
+                  : `${filteredProducts.length} ${filteredProducts.length === 1 ? 'phone' : 'phones'} available`}
             </div>
           </div>
         </div>
@@ -396,7 +412,7 @@ export default function MobilesPage() {
         </section>
       )}
 
-      <section className="container py-4">
+      <section className="container py-4" aria-busy={catalogLoading}>
         <div
           className="d-flex flex-wrap align-items-center justify-content-between gap-3 bg-white p-3 rounded-3 border mb-4"
           style={{ borderColor: 'var(--border-color)' }}
@@ -469,7 +485,30 @@ export default function MobilesPage() {
           </aside>
 
           <div className="col-12 col-lg-9">
-            {visibleProducts.length === 0 ? (
+            {catalogLoading ? (
+              <div className="card border p-4 p-md-5 text-center" role="status" aria-live="polite">
+                <div className="spinner-border text-danger mx-auto mb-3" aria-hidden="true" />
+                <h2 className="h5 fw-bold mb-2">Loading mobile phones</h2>
+                <p className="text-muted small mb-0">Please wait while we load the latest store catalogue.</p>
+              </div>
+            ) : catalogError ? (
+              <div className="card border p-4 p-md-5 text-center" role="alert">
+                <div className="mx-auto mb-3 p-3 rounded-circle bg-light text-danger">
+                  <RefreshCw size={28} />
+                </div>
+                <h2 className="h5 fw-bold mb-2">We couldn’t load the mobile catalogue</h2>
+                <p className="text-muted small mx-auto mb-3" style={{ maxWidth: '420px' }}>
+                  Please check your connection and try again.
+                </p>
+                <button
+                  type="button"
+                  className="btn btn-brand-primary btn-sm align-self-center px-4"
+                  onClick={() => window.location.reload()}
+                >
+                  Try again
+                </button>
+              </div>
+            ) : visibleProducts.length === 0 ? (
               <div className="card border p-4 p-md-5 text-center">
                 <div className="mx-auto mb-3 p-3 rounded-circle bg-light text-danger">
                   <RefreshCw size={28} />
@@ -648,3 +687,5 @@ export default function MobilesPage() {
     </main>
   );
 }
+
+

@@ -2,6 +2,7 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { withSupabase } from "npm:@supabase/server@^1";
 
 type EnquiryPayload = {
+  requestId?: unknown;
   customerName?: unknown;
   phone?: unknown;
   email?: unknown;
@@ -36,6 +37,9 @@ async function sha256(value: string): Promise<string> {
     .map((byte) => byte.toString(16).padStart(2, "0"))
     .join("");
 }
+
+const UUID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export default {
   fetch: withSupabase(
@@ -91,6 +95,15 @@ export default {
           });
         }
 
+        const requestId = clean(body.requestId);
+
+        if (!UUID_PATTERN.test(requestId)) {
+          return Response.json(
+            { error: "Please refresh the page and submit your enquiry again." },
+            { status: 400 },
+          );
+        }
+
         const customerName = clean(body.customerName);
         const phone = clean(body.phone);
         const email = clean(body.email);
@@ -143,6 +156,34 @@ export default {
           );
         }
 
+        // If this request ID has already been saved, acknowledge it without
+        // creating another row or sending another notification email.
+        const { data: existingEnquiry, error: lookupError } =
+          await ctx.supabaseAdmin
+            .from("enquiries")
+            .select("id")
+            .eq("request_id", requestId)
+            .maybeSingle();
+
+        if (lookupError) {
+          console.error(
+            "Could not check enquiry request ID:",
+            lookupError.message,
+          );
+          return Response.json(
+            { error: "Enquiry submission is temporarily unavailable." },
+            { status: 503 },
+          );
+        }
+
+        if (existingEnquiry) {
+          return Response.json({
+            success: true,
+            saved: true,
+            duplicate: true,
+          });
+        }
+
         const forwardedFor = req.headers.get("x-forwarded-for");
         const ipAddress =
           forwardedFor?.split(",")[0]?.trim() ||
@@ -163,7 +204,10 @@ export default {
           });
 
         if (limitError) {
-          console.error("Enquiry rate-limit check failed:", limitError.message);
+          console.error(
+            "Enquiry rate-limit check failed:",
+            limitError.message,
+          );
           return Response.json(
             { error: "Enquiry submission is temporarily unavailable." },
             { status: 503 },
@@ -188,6 +232,7 @@ export default {
         const { error: saveError } = await ctx.supabaseAdmin
           .from("enquiries")
           .insert({
+            request_id: requestId,
             name: customerName,
             phone,
             email: email || null,
@@ -196,6 +241,16 @@ export default {
           });
 
         if (saveError) {
+          // A concurrent retry may pass the lookup above, but the unique
+          // index ensures only one request can insert this request ID.
+          if (saveError.code === "23505") {
+            return Response.json({
+              success: true,
+              saved: true,
+              duplicate: true,
+            });
+          }
+
           console.error("Could not save enquiry:", saveError.message);
           return Response.json(
             { error: "We could not submit your enquiry. Please try again." },

@@ -21,12 +21,23 @@ import ProductCard from '../../components/common/ProductCard';
 export default function ProductDetailsPage() {
   const { slug } = useParams();
   const navigate = useNavigate();
-  const { db, publishedProducts, activeOffers } = useData();
+  const {
+    db = {},
+    publishedProducts: productsFromStore = [],
+    activeOffers: offersFromStore = [],
+    catalogLoading = false,
+    catalogError = ''
+  } = useData();
   const { isInWishlist, toggleWishlist } = useWishlist();
+  const safeDb = db && typeof db === 'object' ? db : {};
+  const publishedProducts = Array.isArray(productsFromStore)
+    ? productsFromStore.filter((item) => item && typeof item === 'object')
+    : [];
+  const activeOffers = Array.isArray(offersFromStore) ? offersFromStore : [];
 
   const product = useMemo(
-    () => (db.products || []).find((item) => item.slug === slug),
-    [db.products, slug]
+    () => publishedProducts.find((item) => item.slug === slug),
+    [publishedProducts, slug]
   );
 
   // The confirmed Mobile Phones category slug in Supabase.
@@ -179,8 +190,39 @@ export default function ProductDetailsPage() {
       .slice(0, 4);
   }, [publishedProducts, product]);
 
-  const contact = db.contactSettings || {};
+  const contact = safeDb.contactSettings || {};
   const whatsappNumber = contact.whatsapp?.replace(/[^0-9]/g, '');
+
+  if (catalogLoading) {
+    return (
+      <main className="container py-5 text-center" role="status" aria-live="polite">
+        <div className="card p-5 max-w-md mx-auto border" style={{ borderColor: 'var(--border-color)' }}>
+          <div className="spinner-border text-danger mx-auto mb-3" aria-hidden="true" />
+          <h1 className="h4 fw-bold mb-2">Loading product</h1>
+          <p className="text-muted small mb-0">Please wait while we load the product details.</p>
+        </div>
+      </main>
+    );
+  }
+
+  if (catalogError) {
+    return (
+      <main className="container py-5 text-center" role="alert">
+        <div className="card p-5 max-w-md mx-auto border" style={{ borderColor: 'var(--border-color)' }}>
+          <h1 className="h4 fw-bold mb-2">Product details unavailable</h1>
+          <p className="text-muted small mb-4">We couldn’t load the store catalogue. Please try again.</p>
+          <div className="d-flex justify-content-center flex-wrap gap-2">
+            <button type="button" className="btn btn-brand-primary btn-sm px-4 py-2" onClick={() => window.location.reload()}>
+              Try again
+            </button>
+            <Link to="/mobiles" className="btn btn-brand-outline btn-sm px-4 py-2">
+              Browse mobiles
+            </Link>
+          </div>
+        </div>
+      </main>
+    );
+  }
 
   if (!product || product.status === 'draft') {
     return (
@@ -189,10 +231,10 @@ export default function ProductDetailsPage() {
           className="card p-5 max-w-md mx-auto border"
           style={{ borderColor: 'var(--border-color)' }}
         >
-          <h3 className="fw-bold mb-2">Product Not Found</h3>
+          <h3 className="fw-bold mb-2">Product not available</h3>
           <p className="text-muted small mb-4">
-            The requested product may be currently unpublished or out of stock
-            in our active catalogue.
+            This product may have been removed or is no longer available
+            in the store catalogue.
           </p>
           <Link
             to="/mobiles"
@@ -813,3 +855,5 @@ export default function ProductDetailsPage() {
     </div>
   );
 }
+
+

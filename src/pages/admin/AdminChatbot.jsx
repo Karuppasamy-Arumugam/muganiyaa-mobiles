@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Save, CheckCircle2, Bot, Plus, Trash2 } from 'lucide-react';
 import { useData } from '../../context/DataContext';
 
@@ -6,6 +6,12 @@ export default function AdminChatbot() {
   const { db, updateChatbotSettings } = useData();
   const [settings, setSettings] = useState(db.chatbotSettings || {});
   const [savedSuccess, setSavedSuccess] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
+
+  useEffect(() => {
+    setSettings(db.chatbotSettings || {});
+  }, [db.chatbotSettings]);
 
   const handleStarterQuestionChange = (index, value) => {
     const updated = [...(settings.starterQuestions || [])];
@@ -23,11 +29,22 @@ export default function AdminChatbot() {
     setSettings({ ...settings, starterQuestions: updated });
   };
 
-  const handleSave = (e) => {
-    e.preventDefault();
-    updateChatbotSettings(settings);
-    setSavedSuccess(true);
-    setTimeout(() => setSavedSuccess(false), 2000);
+  const handleSave = async (event) => {
+    event.preventDefault();
+    setErrorMessage('');
+    setSavedSuccess(false);
+    setIsSaving(true);
+
+    try {
+      await updateChatbotSettings(settings);
+      setSavedSuccess(true);
+      window.setTimeout(() => setSavedSuccess(false), 3000);
+    } catch (error) {
+      console.error('Could not save chatbot settings:', error);
+      setErrorMessage(error.message || 'Could not save chatbot settings. Please try again.');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   return (
@@ -36,20 +53,24 @@ export default function AdminChatbot() {
         <div>
           <h2 className="fw-bold text-dark mb-1 fs-3">Muganiyaa Assistant Configuration</h2>
           <p className="text-muted small mb-0">
-            Configure simulated AI chatbot prompts, starter questions, and response behaviors.
+            Configure the assistant name, welcome text, fallback response, and suggested questions.
           </p>
         </div>
 
-        <button type="button" className="btn btn-brand-primary btn-sm d-inline-flex align-items-center gap-1" onClick={handleSave}>
+        <button type="button" className="btn btn-brand-primary btn-sm d-inline-flex align-items-center gap-1" onClick={handleSave} disabled={isSaving}>
           <Save size={16} />
-          <span>Save Assistant Settings</span>
+          <span>{isSaving ? 'Saving…' : 'Save Assistant Settings'}</span>
         </button>
       </div>
+
+      {errorMessage && (
+        <div className="alert alert-danger" role="alert">{errorMessage}</div>
+      )}
 
       {savedSuccess && (
         <div className="alert alert-success d-flex align-items-center gap-2 mb-4 shadow-sm">
           <CheckCircle2 size={18} />
-          <span>Chatbot settings updated! Testing changes immediately in floating assistant window.</span>
+          <span>Assistant settings saved successfully.</span>
         </div>
       )}
 
@@ -154,3 +175,4 @@ export default function AdminChatbot() {
     </div>
   );
 }
+

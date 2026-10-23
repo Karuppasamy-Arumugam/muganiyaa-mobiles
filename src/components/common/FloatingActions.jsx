@@ -7,23 +7,30 @@ import { supabase } from '../../services/supabaseClient';
 export default function FloatingActions({ currentProduct = null, currentVariant = null }) {
   const { db } = useData();
   const location = useLocation();
+  const chatbotSettings = db.chatbotSettings || {};
+  const assistantName = chatbotSettings.assistantName?.trim() || 'Muganiyaa Assistant';
+  const welcomeMessage = chatbotSettings.welcomeMessage?.trim() ||
+    'Namaste! Welcome to Muganiyaa-Mobiles. How can I help you today? You can ask about our latest phones, screen repairs, EMI offers, or shop timings.';
+  const defaultStarterQuestions = [
+    'Show phones under ₹20,000',
+    'Do you repair displays?',
+    'What EMI options are available?',
+    'How can I contact the shop?'
+  ];
+  const starterQuestions = Array.isArray(chatbotSettings.starterQuestions)
+    ? chatbotSettings.starterQuestions.map((question) => String(question || '').trim()).filter(Boolean)
+    : defaultStarterQuestions;
+  const chatbotEnabled = chatbotSettings.enabled ?? true;
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [showWhatsAppModal, setShowWhatsAppModal] = useState(false);
-  const [messages, setMessages] = useState([
-    {
-      id: 'msg-welcome',
-      sender: 'bot',
-      text:
-        db.chatbotSettings?.welcomeMessage ||
-        'Namaste! Welcome to Muganiyaa-Mobiles. How can I help you today? You can ask about our latest phones, screen repairs, EMI offers, or shop timings.'
-    }
+  const [messages, setMessages] = useState(() => [
+    { id: 'msg-welcome', sender: 'bot', text: welcomeMessage }
   ]);
   const [inputVal, setInputVal] = useState('');
   const [isThinking, setIsThinking] = useState(false);
   const chatMessagesEndRef = useRef(null);
   const messageIdCounter = useRef(1);
 
-  const chatbotEnabled = db.chatbotSettings?.enabled ?? true;
   const contact = db.contactSettings || {};
   const whatsappNumber = contact.whatsapp?.replace(/[^0-9]/g, '');
   const isAdmin = location.pathname.startsWith('/store-owner-7f3c9a2e6b41d805');
@@ -33,6 +40,19 @@ export default function FloatingActions({ currentProduct = null, currentVariant 
       chatMessagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }
   }, [messages, isChatOpen]);
+
+  // Settings may arrive after the widget's first render. Update the greeting
+  // only while the customer has not started a conversation.
+  useEffect(() => {
+    setMessages((current) => {
+      if (current.length !== 1 || current[0]?.id !== 'msg-welcome') return current;
+      return [{ ...current[0], text: welcomeMessage }];
+    });
+  }, [welcomeMessage]);
+
+  useEffect(() => {
+    if (!chatbotEnabled) setIsChatOpen(false);
+  }, [chatbotEnabled]);
 
   const getWhatsAppMessage = () => {
     if (currentProduct) {
@@ -135,12 +155,7 @@ export default function FloatingActions({ currentProduct = null, currentVariant 
     }
   };
 
-  const starterQuestions = db.chatbotSettings?.starterQuestions || [
-    'Show phones under ₹20,000',
-    'Do you repair displays?',
-    'What EMI options are available?',
-    'How can I contact the shop?'
-  ];
+
 
   if (isAdmin) return null;
 
@@ -163,8 +178,8 @@ export default function FloatingActions({ currentProduct = null, currentVariant 
             className="floating-btn-chatbot position-relative"
             onClick={() => setIsChatOpen(!isChatOpen)}
             aria-expanded={isChatOpen}
-            aria-label="Open Muganiyaa Assistant"
-            title="Muganiyaa Assistant"
+            aria-label={`Open ${assistantName}`}
+            title={assistantName}
           >
             {isChatOpen ? <X size={26} /> : <Bot size={26} />}
             <span className="position-absolute top-0 start-100 translate-middle p-1 bg-success border border-light rounded-circle">
@@ -226,7 +241,7 @@ export default function FloatingActions({ currentProduct = null, currentVariant 
       )}
 
       {chatbotEnabled && isChatOpen && (
-        <div className="chatbot-popup" role="dialog" aria-label="Muganiyaa Assistant Chat">
+        <div className="chatbot-popup" role="dialog" aria-label={`${assistantName} Chat`}>
           <div className="p-3 bg-white border-bottom d-flex align-items-center justify-content-between">
             <div className="d-flex align-items-center gap-2">
               <div
@@ -237,7 +252,7 @@ export default function FloatingActions({ currentProduct = null, currentVariant 
               </div>
               <div>
                 <h6 className="mb-0 fw-bold" style={{ fontSize: '0.95rem' }}>
-                  {db.chatbotSettings?.assistantName || 'Muganiyaa Assistant'}
+                  {assistantName}
                 </h6>
                 <small className="text-success d-flex align-items-center gap-1" style={{ fontSize: '0.72rem' }}>
                   <span
@@ -364,7 +379,7 @@ export default function FloatingActions({ currentProduct = null, currentVariant 
             {isThinking && (
               <div className="d-flex align-items-center gap-2 text-muted small">
                 <span className="spinner-grow spinner-grow-sm text-danger" role="status" />
-                <span>Muganiyaa Assistant is checking the store information...</span>
+                <span>{assistantName} is checking the store information...</span>
               </div>
             )}
             <div ref={chatMessagesEndRef} />

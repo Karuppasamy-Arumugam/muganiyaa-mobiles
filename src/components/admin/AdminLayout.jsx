@@ -27,12 +27,25 @@ export default function AdminLayout() {
   const { db } = useData();
   const navigate = useNavigate();
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const [logoutError, setLogoutError] = useState('');
 
-  const newEnquiriesCount = (db.enquiries || []).filter((e) => e.status === 'New').length;
+  const newEnquiriesCount = (Array.isArray(db?.enquiries) ? db.enquiries : []).filter((e) => e.status === 'New').length;
 
-  const handleLogout = () => {
-    logout();
-    navigate('/store-owner-7f3c9a2e6b41d805/login');
+  const handleLogout = async () => {
+    if (isLoggingOut) return;
+
+    setIsLoggingOut(true);
+    setLogoutError('');
+
+    try {
+      await logout();
+      navigate('/store-owner-7f3c9a2e6b41d805/login', { replace: true });
+    } catch (error) {
+      console.error('Admin sign-out failed:', error);
+      setLogoutError('Could not sign out. Please try again.');
+      setIsLoggingOut(false);
+    }
   };
 
   const navItems = [
@@ -46,7 +59,7 @@ export default function AdminLayout() {
     { to: '/store-owner-7f3c9a2e6b41d805/content', label: 'Website Content', icon: FileText },
     { to: '/store-owner-7f3c9a2e6b41d805/contact', label: 'Contact & Hours', icon: PhoneCall },
     { to: '/store-owner-7f3c9a2e6b41d805/chatbot', label: 'Chatbot Settings', icon: Bot },
-    { to: '/store-owner-7f3c9a2e6b41d805/demo', label: 'Demo Storage & Reset', icon: RotateCcw }
+    { to: '/store-owner-7f3c9a2e6b41d805/demo', label: 'Store Data & Maintenance', icon: RotateCcw }
   ];
 
   return (
@@ -89,15 +102,22 @@ export default function AdminLayout() {
             <button
               type="button"
               className="btn btn-outline-danger btn-sm d-inline-flex align-items-center gap-1"
+              disabled={isLoggingOut}
               onClick={handleLogout}
               title="End Admin Session"
             >
               <LogOut size={14} />
-              <span className="d-none d-md-inline">Logout</span>
+              <span className="d-none d-md-inline">{isLoggingOut ? 'Signing out…' : 'Logout'}</span>
             </button>
           </div>
         </div>
       </header>
+
+      {logoutError && (
+        <div className="alert alert-danger rounded-0 mb-0" role="alert" aria-live="assertive">
+          {logoutError}
+        </div>
+      )}
 
       {/* Main Admin Wrapper (Sidebar + Body) */}
       <div className="d-flex flex-grow-1 position-relative">
@@ -155,7 +175,7 @@ export default function AdminLayout() {
             <div className="d-flex align-items-center gap-2">
               <div className="rounded-circle bg-success" style={{ width: '8px', height: '8px' }} />
               <small className="text-muted" style={{ fontSize: '0.75rem' }}>
-                Local Demo Storage Active
+                Admin Workspace
               </small>
             </div>
           </div>
@@ -169,3 +189,6 @@ export default function AdminLayout() {
     </div>
   );
 }
+
+
+

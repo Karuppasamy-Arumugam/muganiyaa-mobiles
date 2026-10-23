@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
 import {
   Phone,
@@ -16,9 +16,19 @@ import {
   isSupabaseConfigured
 } from '../../services/supabaseClient';
 
+function createRequestId() {
+  const cryptoApi = globalThis.crypto;
+  if (cryptoApi?.randomUUID) return cryptoApi.randomUUID();
+  return 'enquiry-' + Date.now() + '-' + Math.random().toString(36).slice(2);
+}
+
 export default function ContactPage() {
   const [searchParams] = useSearchParams();
   const { db, addEnquiry } = useData();
+
+  // Retain this ID after a failed request so retrying the same enquiry can be
+  // recognized by the server as the same submission.
+  const requestIdRef = useRef(null);
 
   const preselectedService = searchParams.get('service') || '';
   const preselectedProduct = searchParams.get('product') || '';
@@ -58,7 +68,16 @@ export default function ContactPage() {
     }
   }, [preselectedService, preselectedProduct]);
 
-  const contact = db.contactSettings || {};
+  const updateFormField = (field, value) => {
+    // Editing the enquiry makes it a new submission. An unchanged retry keeps
+    // the existing ID.
+    requestIdRef.current = null;
+    setFormData((previous) => ({ ...previous, [field]: value }));
+  };
+
+  const contact = db?.contactSettings || {};
+  const whatsappNumber = String(contact.whatsapp || '').replace(/\D/g, '');
+  const hasWhatsappNumber = whatsappNumber.length >= 10;
   const mapSearchQuery =
     contact.mapQuery || contact.address || 'Muganiyaa Mobiles';
   const encodedMapQuery = encodeURIComponent(mapSearchQuery);
@@ -82,9 +101,11 @@ export default function ContactPage() {
     const message = formData.message.trim();
 
     if (Array.from(name).length < 6) {
-      validationErrors.customerName = 'Name must be at least 6 characters';
+      validationErrors.customerName =
+        'Name must be at least 6 characters';
     } else if (Array.from(name).length > 120) {
-      validationErrors.customerName = 'Name must be 120 characters or fewer';
+      validationErrors.customerName =
+        'Name must be 120 characters or fewer';
     }
 
     if (!/^[6-9]\d{9}$/.test(mobileDigits)) {
@@ -101,7 +122,8 @@ export default function ContactPage() {
     if (Array.from(message).length < 10) {
       validationErrors.message = 'Message must be at least 10 characters';
     } else if (Array.from(message).length > 2000) {
-      validationErrors.message = 'Please keep your message under 2000 characters';
+      validationErrors.message =
+        'Please keep your message under 2000 characters';
     }
 
     return validationErrors;
@@ -124,10 +146,15 @@ export default function ContactPage() {
 
     try {
       if (supabase && isSupabaseConfigured) {
+        if (!requestIdRef.current) {
+          requestIdRef.current = createRequestId();
+        }
+
         const { data, error } = await supabase.functions.invoke(
           'send-enquiry',
           {
             body: {
+              requestId: requestIdRef.current,
               customerName: formData.customerName.trim(),
               phone: formData.phone.trim(),
               email: formData.email.trim(),
@@ -150,6 +177,7 @@ export default function ContactPage() {
         await addEnquiry(formData);
       }
 
+      requestIdRef.current = null;
       setIsSubmitted(true);
     } catch (error) {
       console.error('Could not submit enquiry:', error);
@@ -162,6 +190,7 @@ export default function ContactPage() {
   };
 
   const resetForm = () => {
+    requestIdRef.current = null;
     setIsSubmitted(false);
     setIsSubmitting(false);
     setSubmitError('');
@@ -214,7 +243,9 @@ export default function ContactPage() {
               className="card p-4 border bg-white rounded-4 mb-4 shadow-sm"
               style={{ borderColor: 'var(--border-color)' }}
             >
-              <h4 className="fw-bold mb-3 text-dark">Showroom Information</h4>
+              <h4 className="fw-bold mb-3 text-dark">
+                Showroom Information
+              </h4>
 
               <div className="d-flex flex-column gap-3 text-muted">
                 <div className="d-flex align-items-start gap-3">
@@ -245,7 +276,9 @@ export default function ContactPage() {
                         {contact.phone}
                       </a>
                     ) : (
-                      <p className="small mb-0">Phone number not available</p>
+                      <p className="small mb-0">
+                        Phone number not available
+                      </p>
                     )}
                   </div>
                 </div>
@@ -298,7 +331,9 @@ export default function ContactPage() {
             >
               <div className="p-3 d-flex align-items-center justify-content-between gap-2">
                 <div>
-                  <h6 className="fw-bold text-dark mb-1">Store Location Map</h6>
+                  <h6 className="fw-bold text-dark mb-1">
+                    Store Location Map
+                  </h6>
                   <p className="text-muted small mb-0">
                     Map preview for {mapSearchQuery}
                   </p>
@@ -346,7 +381,7 @@ export default function ContactPage() {
               style={{ borderColor: 'var(--border-color)' }}
             >
               {isSubmitted ? (
-                <div className="py-4 text-center">
+                <div className="py-4 text-center" role="status" aria-live="polite">
                   <div className="p-3 rounded-circle bg-success-subtle text-success d-inline-block mb-3">
                     <CheckCircle2 size={48} />
                   </div>
@@ -373,7 +408,7 @@ export default function ContactPage() {
                   </button>
                 </div>
               ) : (
-                <form onSubmit={handleSubmit}>
+                <form onSubmit={handleSubmit} noValidate>
                   <div
                     aria-hidden="true"
                     style={{
@@ -401,7 +436,9 @@ export default function ContactPage() {
                       <span className="badge-blush text-uppercase fw-bold mb-1 d-inline-block">
                         Customer Care
                       </span>
-                      <h3 className="fw-bold text-dark mb-0">Send an Enquiry</h3>
+                      <h3 className="fw-bold text-dark mb-0">
+                        Send an Enquiry
+                      </h3>
                     </div>
                     <Wrench size={24} className="text-danger" />
                   </div>
@@ -434,10 +471,7 @@ export default function ContactPage() {
                         placeholder="e.g. Ramesh Kumar"
                         value={formData.customerName}
                         onChange={(event) =>
-                          setFormData({
-                            ...formData,
-                            customerName: event.target.value
-                          })
+                          updateFormField('customerName', event.target.value)
                         }
                       />
                       {errors.customerName && (
@@ -452,7 +486,8 @@ export default function ContactPage() {
                         htmlFor="phone"
                         className="form-label small fw-bold text-dark"
                       >
-                        Mobile Phone Number <span className="text-danger">*</span>
+                        Mobile Phone Number{' '}
+                        <span className="text-danger">*</span>
                       </label>
                       <input
                         id="phone"
@@ -463,10 +498,7 @@ export default function ContactPage() {
                         placeholder="e.g. +91 98410 12345"
                         value={formData.phone}
                         onChange={(event) =>
-                          setFormData({
-                            ...formData,
-                            phone: event.target.value
-                          })
+                          updateFormField('phone', event.target.value)
                         }
                       />
                       {errors.phone && (
@@ -482,7 +514,9 @@ export default function ContactPage() {
                         className="form-label small fw-bold text-dark"
                       >
                         Email Address{' '}
-                        <span className="text-muted fw-normal">(Optional)</span>
+                        <span className="text-muted fw-normal">
+                          (Optional)
+                        </span>
                       </label>
                       <input
                         id="email"
@@ -492,10 +526,7 @@ export default function ContactPage() {
                         placeholder="e.g. name@example.com"
                         value={formData.email}
                         onChange={(event) =>
-                          setFormData({
-                            ...formData,
-                            email: event.target.value
-                          })
+                          updateFormField('email', event.target.value)
                         }
                       />
                       {errors.email && (
@@ -517,10 +548,7 @@ export default function ContactPage() {
                         className="form-select"
                         value={formData.enquiryType}
                         onChange={(event) =>
-                          setFormData({
-                            ...formData,
-                            enquiryType: event.target.value
-                          })
+                          updateFormField('enquiryType', event.target.value)
                         }
                       >
                         <option value="Smartphone Repair">
@@ -559,10 +587,10 @@ export default function ContactPage() {
                         placeholder="e.g. Samsung Galaxy model or cracked screen"
                         value={formData.selectedProductOrService}
                         onChange={(event) =>
-                          setFormData({
-                            ...formData,
-                            selectedProductOrService: event.target.value
-                          })
+                          updateFormField(
+                            'selectedProductOrService',
+                            event.target.value
+                          )
                         }
                       />
                     </div>
@@ -584,10 +612,7 @@ export default function ContactPage() {
                         placeholder="Describe what you are looking for or the fault symptoms."
                         value={formData.message}
                         onChange={(event) =>
-                          setFormData({
-                            ...formData,
-                            message: event.target.value
-                          })
+                          updateFormField('message', event.target.value)
                         }
                       />
                       {errors.message && (
@@ -628,3 +653,4 @@ export default function ContactPage() {
     </div>
   );
 }
+

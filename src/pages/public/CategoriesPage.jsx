@@ -7,7 +7,12 @@ import ProductCard from '../../components/common/ProductCard';
 const formatPrice = (value) => Number(value || 0).toLocaleString('en-IN');
 
 export default function CategoriesPage() {
-  const { db = {}, publishedProducts = [] } = useData();
+  const {
+    db = {},
+    publishedProducts: productsFromStore = [],
+    catalogLoading = false,
+    catalogError = ''
+  } = useData();
   const [searchParams, setSearchParams] = useSearchParams();
 
   const selectedCatSlug = searchParams.get('category') || 'all';
@@ -17,7 +22,8 @@ export default function CategoriesPage() {
   const [sortBy, setSortBy] = useState('featured');
   const [selectedMaxPrice, setSelectedMaxPrice] = useState(null);
 
-  const categories = db.categories || [];
+  const publishedProducts = Array.isArray(productsFromStore) ? productsFromStore : [];
+  const categories = Array.isArray(db.categories) ? db.categories : [];
 
   useEffect(() => {
     setSearchQuery(queryParam);
@@ -213,7 +219,7 @@ export default function CategoriesPage() {
         </div>
       </section>
 
-      <section className="container py-4">
+      <section className="container py-4" aria-busy={catalogLoading}>
         <div
           className="card border-0 shadow-sm p-3 p-md-4 mb-4"
           style={{ borderRadius: 'var(--radius-md)' }}
@@ -318,23 +324,50 @@ export default function CategoriesPage() {
           )}
         </div>
 
-        <div className="d-flex justify-content-between align-items-center mb-3">
-          <p className="small text-muted mb-0">
-            Showing {filteredProducts.length}{' '}
-            {filteredProducts.length === 1 ? 'item' : 'items'}
-          </p>
-        </div>
+        {!catalogLoading && !catalogError && (
+          <div className="d-flex justify-content-between align-items-center mb-3">
+            <p className="small text-muted mb-0">
+              Showing {filteredProducts.length}{' '}
+              {filteredProducts.length === 1 ? 'item' : 'items'}
+            </p>
+          </div>
+        )}
 
-        {filteredProducts.length === 0 ? (
+        {catalogLoading ? (
+          <div className="card border-0 shadow-sm p-4 p-md-5 text-center" role="status" aria-live="polite">
+            <div className="spinner-border text-danger mx-auto mb-3" aria-hidden="true" />
+            <h2 className="h5 fw-bold mb-2">Loading products</h2>
+            <p className="text-muted small mb-0">Please wait while we load the store catalogue.</p>
+          </div>
+        ) : catalogError ? (
+          <div className="card border-0 shadow-sm p-4 p-md-5 text-center" role="alert">
+            <div className="mx-auto mb-3 p-3 rounded-circle bg-light text-danger">
+              <RefreshCw size={28} />
+            </div>
+            <h2 className="h5 fw-bold mb-2">We couldn’t load the catalogue</h2>
+            <p className="text-muted small mx-auto mb-3" style={{ maxWidth: '420px' }}>
+              Please check your connection and try again.
+            </p>
+            <button
+              type="button"
+              className="btn btn-brand-primary btn-sm align-self-center px-4"
+              onClick={() => window.location.reload()}
+            >
+              Try again
+            </button>
+          </div>
+        ) : filteredProducts.length === 0 ? (
           <div className="card border-0 shadow-sm p-4 p-md-5 text-center">
             <div className="mx-auto mb-3 p-3 rounded-circle bg-light text-danger">
               <RefreshCw size={28} />
             </div>
-            <h2 className="h5 fw-bold mb-2">No products found</h2>
+            <h2 className="h5 fw-bold mb-2">{isFiltered ? 'No matching products' : 'No products available right now'}</h2>
             <p className="text-muted small mx-auto mb-3" style={{ maxWidth: '420px' }}>
-              Try changing your search, choosing another category, or clearing the price filter.
+              {isFiltered
+                ? 'Try changing your search, choosing another category, or clearing the price filter.'
+                : 'The store catalogue has no products available to display right now. Contact the store for availability.'}
             </p>
-            {isFiltered && (
+            {isFiltered ? (
               <button
                 type="button"
                 className="btn btn-brand-primary btn-sm align-self-center px-4"
@@ -342,6 +375,10 @@ export default function CategoriesPage() {
               >
                 View all products
               </button>
+            ) : (
+              <Link to="/contact" className="btn btn-brand-primary btn-sm align-self-center px-4">
+                Contact the store
+              </Link>
             )}
           </div>
         ) : (
@@ -360,3 +397,4 @@ export default function CategoriesPage() {
     </main>
   );
 }
+

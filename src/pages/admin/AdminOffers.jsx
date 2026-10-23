@@ -3,7 +3,15 @@ import { Plus } from 'lucide-react';
 import { useData } from '../../context/DataContext';
 
 export default function AdminOffers() {
-  const { db, addOffer, updateOffer, deleteOffer } = useData();
+  const {
+    db,
+    offersLoading = false,
+    offersError = '',
+    reloadOffers = () => {},
+    addOffer,
+    updateOffer,
+    deleteOffer
+  } = useData();
 
   const offers = db.offers || [];
   const [editingOffer, setEditingOffer] = useState(null);
@@ -112,7 +120,31 @@ export default function AdminOffers() {
         </button>
       </div>
 
+      {offersLoading && (
+        <div className="alert alert-light border d-flex align-items-center gap-3 mb-4" role="status" aria-live="polite">
+          <span className="spinner-border spinner-border-sm text-danger" aria-hidden="true" />
+          <span>Loading offers from Supabase…</span>
+        </div>
+      )}
+
+      {offersError && !offersLoading && (
+        <div className="alert alert-warning d-flex flex-column flex-sm-row align-items-sm-center justify-content-between gap-3 mb-4" role="alert">
+          <span>Offers could not be loaded. Your saved offers may not be up to date.</span>
+          <button type="button" className="btn btn-outline-dark btn-sm align-self-start align-self-sm-auto" onClick={() => void reloadOffers()}>
+            Try again
+          </button>
+        </div>
+      )}
+
+      {!offersLoading && !offersError && offers.length === 0 && (
+        <div className="card border rounded-4 p-4 text-center shadow-sm mb-4">
+          <h3 className="h5 fw-bold mb-2">No offers have been added</h3>
+          <p className="text-muted mb-0">Create an offer to display it on the public website.</p>
+        </div>
+      )}
+
       {/* Offers Cards Grid */}
+      {!offersLoading && !offersError && offers.length > 0 && (
       <div className="row g-4">
         {offers.map((offer) => {
           const isActive = offer.status === 'active';
@@ -173,6 +205,7 @@ export default function AdminOffers() {
           );
         })}
       </div>
+      )}
 
       {/* Offer Editor Modal */}
       {showModal && (
@@ -330,3 +363,4 @@ export default function AdminOffers() {
     </div>
   );
 }
+

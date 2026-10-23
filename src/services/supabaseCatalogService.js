@@ -16,6 +16,7 @@ function toCatalogProduct(row, related) {
       id: variant.id,
       sku: variant.sku || '',
       color: variant.color_name || '',
+      colorHex: variant.color_hex || null,
       ram: variant.ram || '',
       storage: variant.storage || '',
       variantAttributes: variant.variant_attributes || {},

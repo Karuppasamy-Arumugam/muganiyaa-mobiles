@@ -16,7 +16,13 @@ const emptyBanner = {
 };
 
 export default function AdminBanners() {
-  const { db, updateBanners } = useData();
+  const {
+    db,
+    bannersLoading = false,
+    bannersError = '',
+    reloadBanners = () => {},
+    updateBanners
+  } = useData();
   const banners = db.banners || [];
 
   const [editingBanner, setEditingBanner] = useState(null);
@@ -212,12 +218,37 @@ export default function AdminBanners() {
           type="button"
           className="btn btn-brand-primary btn-sm d-inline-flex align-items-center gap-1"
           onClick={handleOpenAdd}
+          disabled={bannersLoading || Boolean(bannersError)}
         >
           <Plus size={16} />
           <span>Add Hero Banner</span>
         </button>
       </div>
 
+      {bannersLoading && (
+        <div className="alert alert-light border d-flex align-items-center gap-3 mb-4" role="status" aria-live="polite">
+          <span className="spinner-border spinner-border-sm text-danger" aria-hidden="true" />
+          <span>Loading homepage banners from Supabase…</span>
+        </div>
+      )}
+
+      {bannersError && !bannersLoading && (
+        <div className="alert alert-warning d-flex flex-column flex-sm-row align-items-sm-center justify-content-between gap-3 mb-4" role="alert">
+          <span>Homepage banners could not be loaded. Changes are disabled until the saved list is available.</span>
+          <button type="button" className="btn btn-outline-dark btn-sm align-self-start align-self-sm-auto" onClick={() => void reloadBanners()}>
+            Try again
+          </button>
+        </div>
+      )}
+
+      {!bannersLoading && !bannersError && banners.length === 0 && (
+        <div className="card border rounded-4 bg-white p-5 text-center">
+          <h3 className="h5 fw-bold">No hero banners yet</h3>
+          <p className="text-muted mb-0">Add a banner to feature a promotion on the homepage.</p>
+        </div>
+      )}
+
+      {!bannersLoading && !bannersError && banners.length > 0 && (
       <div className="row g-4">
         {banners.map((banner, index) => (
           <div key={banner.id} className="col-12 col-lg-6">
@@ -315,6 +346,7 @@ export default function AdminBanners() {
           </div>
         ))}
       </div>
+      )}
 
       {showModal && (
         <div

@@ -6,14 +6,16 @@ import { useData } from '../../context/DataContext';
 
 export default function WishlistDrawer() {
   const { isWishlistOpen, closeWishlist, wishlistIds, removeFromWishlist, clearWishlist } = useWishlist();
-  const { db } = useData();
+  const { publishedProducts: productsFromStore = [], catalogLoading = false, catalogError = '' } = useData();
   const drawerRef = useRef(null);
   const closeBtnRef = useRef(null);
 
-  // Match active products from shared catalogue
-  // Handles deleted or unpublished products gracefully
+  // Resolve saved IDs against the public catalogue so unpublished products do not appear.
+  const publicProducts = Array.isArray(productsFromStore)
+    ? productsFromStore.filter((product) => product && typeof product === 'object')
+    : [];
   const wishlistProducts = wishlistIds
-    .map((id) => (db.products || []).find((p) => p.id === id && p.status === 'published'))
+    .map((id) => publicProducts.find((product) => product.id === id))
     .filter(Boolean);
 
   // Keyboard accessibility: ESC key to close & Focus trap
@@ -65,7 +67,11 @@ export default function WishlistDrawer() {
             <div>
               <h6 className="mb-0 fw-bold">My Wishlist</h6>
               <small className="text-muted">
-                {wishlistProducts.length} {wishlistProducts.length === 1 ? 'item' : 'items'} saved in browser
+                {catalogLoading
+                  ? 'Loading saved items…'
+                  : catalogError
+                    ? 'Saved items are temporarily unavailable'
+                    : <>{wishlistProducts.length}{' '}{wishlistProducts.length === 1 ? 'item' : 'items'} saved on this device</>}
               </small>
             </div>
           </div>
@@ -83,7 +89,26 @@ export default function WishlistDrawer() {
 
         {/* Drawer Body */}
         <div className="flex-grow-1 overflow-y-auto p-3">
-          {wishlistProducts.length === 0 ? (
+          {catalogLoading ? (
+            <div className="h-100 d-flex flex-column align-items-center justify-content-center text-center p-4" role="status" aria-live="polite">
+              <span className="spinner-border text-danger mb-3" aria-hidden="true" />
+              <h6 className="fw-bold mb-1">Loading your wishlist</h6>
+              <p className="text-muted small mb-0">We’re checking which saved products are still available.</p>
+            </div>
+          ) : catalogError ? (
+            <div className="h-100 d-flex flex-column align-items-center justify-content-center text-center p-4" role="alert">
+              <div className="p-3 rounded-circle mb-3" style={{ backgroundColor: 'var(--secondary-bg)' }}>
+                <ShoppingBag size={40} className="text-muted" />
+              </div>
+              <h6 className="fw-bold mb-1">Saved products couldn’t be loaded</h6>
+              <p className="text-muted small mb-4" style={{ maxWidth: '250px' }}>
+                Your saved list is on this device. Please try again later or browse the catalogue.
+              </p>
+              <Link to="/categories" onClick={closeWishlist} className="btn btn-brand-primary btn-sm px-4 py-2">
+                Browse catalogue <ArrowRight size={15} className="ms-1" />
+              </Link>
+            </div>
+          ) : wishlistProducts.length === 0 ? (
             <div className="h-100 d-flex flex-column align-items-center justify-content-center text-center p-4">
               <div className="p-4 rounded-circle mb-3" style={{ backgroundColor: 'var(--secondary-bg)' }}>
                 <ShoppingBag size={48} className="text-muted" />
@@ -92,13 +117,13 @@ export default function WishlistDrawer() {
               <p className="text-muted small mb-4" style={{ maxWidth: '240px' }}>
                 Tap the heart icon on any mobile phone or appliance to save it for quick reference!
               </p>
-              <button
-                type="button"
-                className="btn btn-brand-primary btn-sm px-4 py-2"
+              <Link
+                to="/categories"
+                className="btn btn-brand-primary btn-sm px-4 py-2 d-inline-flex align-items-center gap-2"
                 onClick={closeWishlist}
               >
-                Explore Catalogue
-              </button>
+                Explore catalogue <ArrowRight size={15} />
+              </Link>
             </div>
           ) : (
             <div className="d-flex flex-column gap-3">
@@ -193,7 +218,7 @@ export default function WishlistDrawer() {
         </div>
 
         {/* Drawer Footer */}
-        {wishlistProducts.length > 0 && (
+        {!catalogLoading && !catalogError && wishlistProducts.length > 0 && (
           <div className="p-3 border-top bg-light d-flex align-items-center justify-content-between">
             <button
               type="button"
@@ -215,3 +240,5 @@ export default function WishlistDrawer() {
     </>
   );
 }
+
+

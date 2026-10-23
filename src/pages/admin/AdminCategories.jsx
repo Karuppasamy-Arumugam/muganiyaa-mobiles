@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Edit, Trash2, AlertTriangle, Plus, X } from 'lucide-react';
 import { useData } from '../../context/DataContext';
 
@@ -12,6 +12,8 @@ const makeSlug = (value) =>
 export default function AdminCategories() {
   const {
     db,
+    catalogLoading,
+    catalogError,
     addCategory,
     updateCategory,
     deleteCategory,
@@ -23,6 +25,24 @@ export default function AdminCategories() {
   const categories = db.categories || [];
   const brands = db.brands || [];
   const products = db.products || [];
+  const [categorySearch, setCategorySearch] = useState('');
+  const [brandSearch, setBrandSearch] = useState('');
+
+  const filteredCategories = useMemo(() => {
+    const query = categorySearch.trim().toLowerCase();
+    if (!query) return categories;
+    return categories.filter((category) =>
+      `${category.name || ''} ${category.slug || ''}`.toLowerCase().includes(query)
+    );
+  }, [categories, categorySearch]);
+
+  const filteredBrands = useMemo(() => {
+    const query = brandSearch.trim().toLowerCase();
+    if (!query) return brands;
+    return brands.filter((brand) =>
+      `${brand.name || ''} ${brand.slug || ''}`.toLowerCase().includes(query)
+    );
+  }, [brands, brandSearch]);
 
   const [editingCat, setEditingCat] = useState(null);
   const [newCatName, setNewCatName] = useState('');
@@ -221,6 +241,12 @@ export default function AdminCategories() {
         </div>
       )}
 
+      {catalogError && (
+        <div className="alert alert-danger py-2 small" role="alert">
+          {catalogError} Refresh the page to try loading categories and brands again.
+        </div>
+      )}
+
       <section className="mb-5">
         <h4 className="fw-bold text-dark mb-3">Categories</h4>
 
@@ -293,6 +319,18 @@ export default function AdminCategories() {
                 Configured Categories ({categories.length})
               </div>
 
+              <div className="p-3 border-bottom">
+                <label className="visually-hidden" htmlFor="categorySearch">Search categories</label>
+                <input
+                  id="categorySearch"
+                  type="search"
+                  className="form-control form-control-sm"
+                  placeholder="Search categories by name or slug"
+                  value={categorySearch}
+                  onChange={(event) => setCategorySearch(event.target.value)}
+                  disabled={catalogLoading || Boolean(catalogError)}
+                />
+              </div>
               <div className="table-responsive">
                 <table className="table table-hover align-middle mb-0">
                   <thead className="table-light">
@@ -304,7 +342,12 @@ export default function AdminCategories() {
                     </tr>
                   </thead>
                   <tbody>
-                    {categories.map((category) => {
+                    {catalogLoading && (
+                      <tr><td colSpan="4" className="p-4 text-center text-muted small">
+                        <span className="spinner-border spinner-border-sm me-2" aria-hidden="true" />Loading categories…
+                      </td></tr>
+                    )}
+                    {!catalogLoading && !catalogError && filteredCategories.map((category) => {
                       const linkedCount = categoryProductCount(category.slug);
 
                       return (
@@ -344,13 +387,13 @@ export default function AdminCategories() {
                       );
                     })}
 
-                    {categories.length === 0 && (
+                    {!catalogLoading && !catalogError && filteredCategories.length === 0 && (
                       <tr>
                         <td
                           colSpan="4"
                           className="p-4 text-center text-muted small"
                         >
-                          No categories found.
+                          {categories.length === 0 ? 'No categories have been added yet.' : 'No categories match your search.'}
                         </td>
                       </tr>
                     )}
@@ -457,6 +500,18 @@ export default function AdminCategories() {
                 Configured Brands ({brands.length})
               </div>
 
+              <div className="p-3 border-bottom">
+                <label className="visually-hidden" htmlFor="brandSearch">Search brands</label>
+                <input
+                  id="brandSearch"
+                  type="search"
+                  className="form-control form-control-sm"
+                  placeholder="Search brands by name or slug"
+                  value={brandSearch}
+                  onChange={(event) => setBrandSearch(event.target.value)}
+                  disabled={catalogLoading || Boolean(catalogError)}
+                />
+              </div>
               <div className="table-responsive">
                 <table className="table table-hover align-middle mb-0">
                   <thead className="table-light">
@@ -469,7 +524,12 @@ export default function AdminCategories() {
                     </tr>
                   </thead>
                   <tbody>
-                    {brands.map((brand) => {
+                    {catalogLoading && (
+                      <tr><td colSpan="5" className="p-4 text-center text-muted small">
+                        <span className="spinner-border spinner-border-sm me-2" aria-hidden="true" />Loading brands…
+                      </td></tr>
+                    )}
+                    {!catalogLoading && !catalogError && filteredBrands.map((brand) => {
                       const linkedCount = brandProductCount(brand.name);
 
                       return (
@@ -526,13 +586,13 @@ export default function AdminCategories() {
                       );
                     })}
 
-                    {brands.length === 0 && (
+                    {!catalogLoading && !catalogError && filteredBrands.length === 0 && (
                       <tr>
                         <td
                           colSpan="5"
                           className="p-4 text-center text-muted small"
                         >
-                          No brands found. Add a brand using the form.
+                          {brands.length === 0 ? 'No brands have been added yet. Add one using the form.' : 'No brands match your search.'}
                         </td>
                       </tr>
                     )}

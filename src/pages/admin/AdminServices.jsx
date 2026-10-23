@@ -170,7 +170,15 @@ function FeatureFields({ features, onChange }) {
 }
 
 export default function AdminServices() {
-  const { db, addService, updateService, deleteService } = useData();
+  const {
+    db,
+    servicesLoading = false,
+    servicesError = '',
+    reloadServices = () => {},
+    addService,
+    updateService,
+    deleteService
+  } = useData();
 
   const [services, setServices] = useState(db.services || []);
   const [newService, setNewService] = useState(createEmptyService());
@@ -311,6 +319,22 @@ export default function AdminServices() {
         </div>
       )}
 
+      {servicesLoading && (
+        <div className="alert alert-light border d-flex align-items-center gap-3 mb-4" role="status" aria-live="polite">
+          <span className="spinner-border spinner-border-sm text-danger" aria-hidden="true" />
+          <span>Loading services from Supabase…</span>
+        </div>
+      )}
+
+      {servicesError && !servicesLoading && (
+        <div className="alert alert-warning d-flex flex-column flex-sm-row align-items-sm-center justify-content-between gap-3 mb-4" role="alert">
+          <span>Services could not be loaded. The list may not be up to date.</span>
+          <button type="button" className="btn btn-outline-dark btn-sm align-self-start align-self-sm-auto" onClick={() => void reloadServices()}>
+            Try again
+          </button>
+        </div>
+      )}
+
       {isAddFormOpen && (
         <div className="card border rounded-4 bg-white shadow-sm p-4 mb-4">
           <div className="d-flex justify-content-between align-items-start gap-3 mb-3">
@@ -423,7 +447,7 @@ export default function AdminServices() {
         </div>
       )}
 
-      {services.length === 0 && !isAddFormOpen && (
+      {!servicesLoading && !servicesError && services.length === 0 && !isAddFormOpen && (
         <div className="card border rounded-4 bg-white p-5 text-center">
           <div className="mx-auto mb-3 p-3 rounded-circle bg-light text-danger">
             <Wrench size={28} />
@@ -443,6 +467,7 @@ export default function AdminServices() {
         </div>
       )}
 
+      {!servicesLoading && !servicesError && services.length > 0 && (
       <div className="row g-4">
         {services.map((service, index) => {
           const Icon = serviceIcons[service.icon] || Wrench;
@@ -647,6 +672,7 @@ export default function AdminServices() {
           );
         })}
       </div>
+      )}
     </div>
   );
 }

@@ -12,80 +12,159 @@ import {
   Phone,
   MessageCircle,
   MapPin,
-  Clock
+  Clock,
+  Tag,
+  CreditCard,
+  CalendarDays
 } from 'lucide-react';
 import { useData } from '../../context/DataContext';
 import ProductCard from '../../components/common/ProductCard';
 
-export default function HomePage() {
-  const { db, publishedProducts } = useData();
+function asArray(value) {
+  return Array.isArray(value) ? value : [];
+}
 
-  const banners = (db.banners || []).filter((b) => b.active);
+export default function HomePage() {
+  const {
+    db: dbFromStore = {},
+    publishedProducts: productsFromStore = [],
+    activeOffers: offersFromStore = [],
+    offersLoading = false,
+    offersError = '',
+    reloadOffers = () => {},
+    bannersLoading = false,
+    bannersError = '',
+    reloadBanners = () => {},
+    catalogLoading = false,
+    catalogError = '',
+    servicesLoading = false,
+    servicesError = '',
+    reloadServices = () => {}
+  } = useData();
+
+  const db = dbFromStore && typeof dbFromStore === 'object' ? dbFromStore : {};
+  const publishedProducts = asArray(productsFromStore).filter((product) => product && typeof product === 'object');
+  const activeOffers = asArray(offersFromStore);
+  const banners = asArray(db.banners).filter((banner) => banner?.active);
   const [currentSlide, setCurrentSlide] = useState(0);
   const [isPlaying, setIsPlaying] = useState(true);
 
-  // Reduced motion preference check
   const prefersReducedMotion =
     typeof window !== 'undefined' &&
     window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-  // Auto-slide carousel
+  useEffect(() => {
+    if (currentSlide >= banners.length) setCurrentSlide(0);
+  }, [banners.length, currentSlide]);
+
   useEffect(() => {
     if (!isPlaying || prefersReducedMotion || banners.length <= 1) return;
+
     const interval = setInterval(() => {
-      setCurrentSlide((prev) => (prev + 1) % banners.length);
+      setCurrentSlide((previous) => (previous + 1) % banners.length);
     }, 5000);
+
     return () => clearInterval(interval);
   }, [isPlaying, prefersReducedMotion, banners.length]);
 
   const prevSlide = () => {
-    setCurrentSlide((prev) => (prev === 0 ? banners.length - 1 : prev - 1));
+    setCurrentSlide((previous) =>
+      previous === 0 ? banners.length - 1 : previous - 1
+    );
   };
 
   const nextSlide = () => {
-    setCurrentSlide((prev) => (prev + 1) % banners.length);
+    setCurrentSlide((previous) => (previous + 1) % banners.length);
   };
 
-  // Latest Launches & Best Sellers
   const latestLaunches = publishedProducts
-    .filter((p) => p.isLatestLaunch)
+    .filter((product) => product.isLatestLaunch)
     .slice(0, 4);
 
   const bestSellers = publishedProducts
-    .filter((p) => p.isBestSeller)
+    .filter((product) => product.isBestSeller)
     .slice(0, 4);
 
-  const services = db.services || [];
-  const content = db.websiteContent || {};
-  const contact = db.contactSettings || {};
+  const featuredOffers = activeOffers
+    .filter((offer) => {
+      if (!offer.endDate) return true;
 
-  const storePhone = contact?.phone || '';
-  const storeHours = contact?.hours || '';
-  const storeAddress = contact?.address || '';
+      const endDate = new Date(`${offer.endDate}T23:59:59`);
+      return !Number.isNaN(endDate.getTime()) && endDate >= new Date();
+    })
+    .slice(0, 3);
+
+  const formatOfferDate = (value) => {
+    if (!value) return '';
+
+    const date = new Date(`${value}T00:00:00`);
+    if (Number.isNaN(date.getTime())) return value;
+
+    return date.toLocaleDateString('en-IN', {
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric'
+    });
+  };
+
+  const services = asArray(db.services).filter((service) => service && service.active !== false);
+  const content = db.websiteContent && typeof db.websiteContent === 'object' ? db.websiteContent : {};
+  const contact = db.contactSettings && typeof db.contactSettings === 'object' ? db.contactSettings : {};
+
+  const storePhone = contact.phone || '';
+  const storeHours = contact.hours || '';
+  const storeAddress = contact.address || '';
   const phoneHref = storePhone.replace(/[^\d+]/g, '');
 
   return (
     <div className="homepage-wrapper pb-5">
-      {/* 3. Hero Carousel */}
-      {banners.length > 0 && (
-        <section className="hero-carousel-section position-relative bg-dark overflow-hidden" aria-label="Featured Promotions">
+      {bannersLoading && (
+        <div className="container pt-3" role="status" aria-live="polite">
+          <div className="alert alert-light border d-flex align-items-center gap-3 mb-0">
+            <span className="spinner-border spinner-border-sm text-danger" aria-hidden="true" />
+            <span>Loading homepage promotions…</span>
+          </div>
+        </div>
+      )}
+
+      {bannersError && !bannersLoading && (
+        <div className="container pt-3" role="alert">
+          <div className="alert alert-warning d-flex flex-column flex-sm-row align-items-sm-center justify-content-between gap-3 mb-0">
+            <span>We couldn’t load the latest homepage promotions.</span>
+            <button type="button" className="btn btn-outline-dark btn-sm align-self-start align-self-sm-auto" onClick={() => void reloadBanners()}>
+              Try again
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Hero Carousel */}      {banners.length > 0 && (
+        <section
+          className="hero-carousel-section position-relative bg-dark overflow-hidden"
+          aria-label="Featured Promotions"
+        >
           <div
             className="position-relative"
             style={{ minHeight: '380px', maxHeight: '520px', height: '48vw' }}
           >
             {banners.map((banner, index) => {
               const isActive = index === currentSlide;
+
               return (
                 <div
                   key={banner.id}
-                  className={`position-absolute top-0 start-0 w-100 h-100 transition-opacity ${isActive ? 'opacity-100 z-index-2' : 'opacity-0 pointer-events-none'
-                    }`}
+                  className={`position-absolute top-0 start-0 w-100 h-100 transition-opacity ${
+                    isActive
+                      ? 'opacity-100 z-index-2'
+                      : 'opacity-0 pointer-events-none'
+                  }`}
                   style={{
-                    transition: prefersReducedMotion ? 'none' : 'opacity 0.6s ease-in-out',
+                    transition: prefersReducedMotion
+                      ? 'none'
+                      : 'opacity 0.6s ease-in-out',
                     zIndex: isActive ? 2 : 1
                   }}
                 >
-                  {/* Background Image with Dark Gradient Overlay */}
                   <div
                     className="w-100 h-100 position-absolute top-0 start-0"
                     style={{
@@ -95,26 +174,44 @@ export default function HomePage() {
                     }}
                   />
 
-                  {/* Banner Content Container */}
-                  <div className="container h-100 position-relative d-flex align-items-center" style={{ zIndex: 3 }}>
+                  <div
+                    className="container h-100 position-relative d-flex align-items-center"
+                    style={{ zIndex: 3 }}
+                  >
                     <div className="text-white" style={{ maxWidth: '620px' }}>
                       {banner.badge && (
                         <span className="badge-brand d-inline-block mb-2 text-uppercase">
                           {banner.badge}
                         </span>
                       )}
-                      <h1 className="display-6 display-md-5 fw-extrabold text-white mb-2" style={{ fontWeight: 800 }}>
+
+                      <h1
+                        className="display-6 display-md-5 fw-extrabold text-white mb-2"
+                        style={{ fontWeight: 800 }}
+                      >
                         {banner.title}
                       </h1>
-                      <p className="lead text-white-50 mb-4 d-none d-sm-block" style={{ fontSize: '1.05rem', lineHeight: '1.5' }}>
+
+                      <p
+                        className="lead text-white-50 mb-4 d-none d-sm-block"
+                        style={{ fontSize: '1.05rem', lineHeight: '1.5' }}
+                      >
                         {banner.subtitle}
                       </p>
+
                       <div className="d-flex align-items-center gap-3">
-                        <Link to={banner.link || '/mobiles'} className="btn btn-brand-primary px-4 py-2">
+                        <Link
+                          to={banner.link || '/mobiles'}
+                          className="btn btn-brand-primary px-4 py-2"
+                        >
                           <span>{banner.ctaText || 'Explore Now'}</span>
                           <ArrowRight size={18} />
                         </Link>
-                        <Link to="/contact" className="btn btn-outline-light px-3 py-2 d-none d-md-inline-flex">
+
+                        <Link
+                          to="/contact"
+                          className="btn btn-outline-light px-3 py-2 d-none d-md-inline-flex"
+                        >
                           Enquire at Store
                         </Link>
                       </div>
@@ -124,54 +221,63 @@ export default function HomePage() {
               );
             })}
 
-            {/* Carousel Controls */}
             {banners.length > 1 && (
               <>
                 <button
                   type="button"
                   className="btn btn-dark btn-sm rounded-circle position-absolute top-50 start-0 translate-middle-y ms-3 d-flex align-items-center justify-content-center p-2"
-                  style={{ zIndex: 4, backgroundColor: 'rgba(0,0,0,0.45)', border: '1px solid rgba(255,255,255,0.2)' }}
+                  style={{
+                    zIndex: 4,
+                    backgroundColor: 'rgba(0,0,0,0.45)',
+                    border: '1px solid rgba(255,255,255,0.2)'
+                  }}
                   onClick={prevSlide}
                   aria-label="Previous Slide"
                 >
                   <ChevronLeft size={20} className="text-white" />
                 </button>
+
                 <button
                   type="button"
                   className="btn btn-dark btn-sm rounded-circle position-absolute top-50 end-0 translate-middle-y me-3 d-flex align-items-center justify-content-center p-2"
-                  style={{ zIndex: 4, backgroundColor: 'rgba(0,0,0,0.45)', border: '1px solid rgba(255,255,255,0.2)' }}
+                  style={{
+                    zIndex: 4,
+                    backgroundColor: 'rgba(0,0,0,0.45)',
+                    border: '1px solid rgba(255,255,255,0.2)'
+                  }}
                   onClick={nextSlide}
                   aria-label="Next Slide"
                 >
                   <ChevronRight size={20} className="text-white" />
                 </button>
 
-                {/* Indicators & Autoplay Pause Button */}
                 <div
                   className="position-absolute bottom-0 start-50 translate-middle-x mb-3 d-flex align-items-center gap-2"
                   style={{ zIndex: 4 }}
                 >
-                  {banners.map((_, idx) => (
+                  {banners.map((_, index) => (
                     <button
-                      key={idx}
+                      key={index}
                       type="button"
                       className="border-0 rounded-pill p-0"
                       style={{
-                        width: idx === currentSlide ? '24px' : '8px',
+                        width: index === currentSlide ? '24px' : '8px',
                         height: '8px',
-                        backgroundColor: idx === currentSlide ? 'var(--primary-red)' : 'rgba(255,255,255,0.5)',
+                        backgroundColor:
+                          index === currentSlide
+                            ? 'var(--primary-red)'
+                            : 'rgba(255,255,255,0.5)',
                         transition: 'all 0.2s ease'
                       }}
-                      onClick={() => setCurrentSlide(idx)}
-                      aria-label={`Go to slide ${idx + 1}`}
+                      onClick={() => setCurrentSlide(index)}
+                      aria-label={`Go to slide ${index + 1}`}
                     />
                   ))}
 
-                  {/* Pause / Play Toggle */}
                   <button
                     type="button"
                     className="btn btn-link text-white p-0 ms-2"
-                    onClick={() => setIsPlaying(!isPlaying)}
+                    onClick={() => setIsPlaying((playing) => !playing)}
                     aria-label={isPlaying ? 'Pause slideshow' : 'Play slideshow'}
                     title={isPlaying ? 'Pause' : 'Play'}
                   >
@@ -184,6 +290,21 @@ export default function HomePage() {
         </section>
       )}
 
+      {!bannersLoading && banners.length === 0 && (
+        <section className="py-5 bg-dark text-white">
+          <div className="container d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-3">
+            <div>
+              <span className="text-uppercase small fw-bold text-warning">Muganiyaa-Mobiles</span>
+              <h1 className="display-6 fw-bold text-white mb-2">Find your next device</h1>
+              <p className="text-white-50 mb-0">Browse phones, accessories, TVs, and store services.</p>
+            </div>
+            <Link to="/mobiles" className="btn btn-brand-primary px-4 py-2 align-self-start align-self-md-center">
+              Browse mobiles <ArrowRight size={17} />
+            </Link>
+          </div>
+        </section>
+      )}
+
       {/* Quick Category Icons Strip */}
       <section className="py-4 border-bottom bg-white">
         <div className="container">
@@ -192,18 +313,26 @@ export default function HomePage() {
               { name: '5G Mobiles', path: '/mobiles', icon: '📱' },
               { name: 'Smart TVs', path: '/categories?category=tvs', icon: '📺' },
               { name: 'Earbuds & Audio', path: '/categories?category=audio', icon: '🎧' },
-              { name: 'Cooling & AC', path: '/categories?category=cooling-appliances', icon: '❄️' },
-              { name: 'Kitchen & Induction', path: '/categories?category=kitchen-appliances', icon: '🍳' },
+              {
+                name: 'Cooling & AC',
+                path: '/categories?category=cooling-appliances',
+                icon: '❄️'
+              },
+              {
+                name: 'Kitchen & Induction',
+                path: '/categories?category=kitchen-appliances',
+                icon: '🍳'
+              },
               { name: 'SIM & Repairs', path: '/contact?service=repair', icon: '🔧' }
-            ].map((cat, i) => (
-              <div key={i} className="col-4 col-md-2">
+            ].map((category, index) => (
+              <div key={index} className="col-4 col-md-2">
                 <Link
-                  to={cat.path}
+                  to={category.path}
                   className="card h-100 p-2 text-decoration-none text-dark border-0 hover-bg-light transition-all rounded"
                   style={{ backgroundColor: 'var(--secondary-bg)' }}
                 >
-                  <div className="fs-3 mb-1">{cat.icon}</div>
-                  <div className="fw-bold small">{cat.name}</div>
+                  <div className="fs-3 mb-1">{category.icon}</div>
+                  <div className="fw-bold small">{category.name}</div>
                 </Link>
               </div>
             ))}
@@ -211,15 +340,51 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* 4. Latest Launches */}
+      {/* Catalogue loading and error feedback */}
+      {(catalogLoading || catalogError) && (
+        <section className="container pt-4" aria-live="polite">
+          {catalogLoading && (
+            <div className="alert alert-light border d-flex align-items-center gap-3 mb-0" role="status">
+              <span className="spinner-border spinner-border-sm text-danger" aria-hidden="true" />
+              <span>Loading products from the store catalogue…</span>
+            </div>
+          )}
+          {catalogError && !catalogLoading && (
+            <div className="alert alert-warning d-flex flex-column flex-sm-row align-items-sm-center justify-content-between gap-3 mb-0" role="alert">
+              <span>We couldn’t load the product catalogue. Please try again.</span>
+              <button type="button" className="btn btn-outline-dark btn-sm align-self-start align-self-sm-auto" onClick={() => window.location.reload()}>
+                Try again
+              </button>
+            </div>
+          )}
+        </section>
+      )}
+
+      {!catalogLoading && !catalogError && publishedProducts.length === 0 && (
+        <section className="container pt-4">
+          <div className="alert alert-light border d-flex flex-column flex-sm-row align-items-sm-center justify-content-between gap-3 mb-0" role="status">
+            <span>The store catalogue is being updated. Contact the store to check product availability.</span>
+            <Link to="/contact" className="btn btn-brand-outline btn-sm align-self-start align-self-sm-auto">Contact the store</Link>
+          </div>
+        </section>
+      )}
+
+      {/* Latest Launches */}
+      {!catalogLoading && !catalogError && latestLaunches.length > 0 && (
       <section className="py-5">
         <div className="container">
           <div className="d-flex align-items-end justify-content-between mb-4">
             <div>
-              <span className="text-uppercase fw-bold text-danger small">Just Arrived</span>
+              <span className="text-uppercase fw-bold text-danger small">
+                Just Arrived
+              </span>
               <h2 className="fw-bold mb-0">Latest Launches</h2>
             </div>
-            <Link to="/mobiles?filter=latest" className="text-decoration-none fw-bold text-danger d-flex align-items-center gap-1">
+
+            <Link
+              to="/mobiles?filter=latest"
+              className="text-decoration-none fw-bold text-danger d-flex align-items-center gap-1"
+            >
               <span>View All Launches</span>
               <ArrowRight size={16} />
             </Link>
@@ -234,16 +399,24 @@ export default function HomePage() {
           </div>
         </div>
       </section>
+      )}
 
-      {/* 5. Best Sellers */}
+      {/* Best Sellers */}
+      {!catalogLoading && !catalogError && bestSellers.length > 0 && (
       <section className="py-5" style={{ backgroundColor: 'var(--secondary-bg)' }}>
         <div className="container">
           <div className="d-flex align-items-end justify-content-between mb-4">
             <div>
-              <span className="text-uppercase fw-bold text-danger small">Customer Favorites</span>
+              <span className="text-uppercase fw-bold text-danger small">
+                Customer Favorites
+              </span>
               <h2 className="fw-bold mb-0">Best Sellers</h2>
             </div>
-            <Link to="/mobiles?filter=bestseller" className="text-decoration-none fw-bold text-danger d-flex align-items-center gap-1">
+
+            <Link
+              to="/mobiles?filter=bestseller"
+              className="text-decoration-none fw-bold text-danger d-flex align-items-center gap-1"
+            >
               <span>Explore All</span>
               <ArrowRight size={16} />
             </Link>
@@ -258,23 +431,206 @@ export default function HomePage() {
           </div>
         </div>
       </section>
+      )}
 
-      {/* 6. Our Services (Three Cards) */}
+      {/* Current Offers Preview */}
+      <section
+          className="py-5"
+          style={{ backgroundColor: 'var(--secondary-bg)' }}
+          aria-labelledby="home-offers-title"
+        >
+          <div className="container">
+            <div className="d-flex flex-column flex-sm-row align-items-sm-end justify-content-between gap-3 mb-4">
+              <div>
+                <span className="text-uppercase fw-bold text-danger small">
+                  Current Promotions
+                </span>
+                <h2 id="home-offers-title" className="fw-bold mb-0">
+                  Offers &amp; EMI
+                </h2>
+                <p className="text-muted mb-0 mt-2">
+                  Explore current offers and finance options available at our
+                  store.
+                </p>
+              </div>
+
+              <Link
+                to="/offers"
+                className="text-decoration-none fw-bold text-danger d-inline-flex align-items-center gap-1"
+              >
+                View All Offers <ArrowRight size={16} />
+              </Link>
+            </div>
+
+            {offersLoading && (
+              <div className="alert alert-light border d-flex align-items-center gap-3 mb-0" role="status">
+                <span className="spinner-border spinner-border-sm text-danger" aria-hidden="true" />
+                <span>Loading current offers from the store…</span>
+              </div>
+            )}
+
+            {offersError && !offersLoading && (
+              <div className="alert alert-warning d-flex flex-column flex-sm-row align-items-sm-center justify-content-between gap-3 mb-0" role="alert">
+                <span>We couldn’t load the latest offers. Please try again.</span>
+                <button type="button" className="btn btn-outline-dark btn-sm align-self-start align-self-sm-auto" onClick={() => void reloadOffers()}>
+                  Try again
+                </button>
+              </div>
+            )}
+
+            {!offersLoading && !offersError && featuredOffers.length === 0 && (
+              <div className="alert alert-light border mb-0" role="status">
+                There are no active offers to show right now. Please check again later.
+              </div>
+            )}
+
+            {!offersLoading && !offersError && featuredOffers.length > 0 && (
+              <div className="row g-3">
+                {featuredOffers.map((offer) => (
+                <div className="col-12 col-md-6 col-lg-4" key={offer.id}>
+                  <article className="card h-100 border rounded-4 p-4 shadow-sm">
+                    <div className="d-flex align-items-start justify-content-between gap-2 mb-3">
+                      <span className="badge-blush">
+                        {offer.type || 'Store Offer'}
+                      </span>
+
+                      {offer.badgeText && (
+                        <span className="badge bg-danger">
+                          {offer.badgeText}
+                        </span>
+                      )}
+                    </div>
+
+                    <h3 className="h5 fw-bold text-dark mb-3">
+                      {offer.title}
+                    </h3>
+
+                    <div className="d-flex flex-column gap-2 text-muted small mb-3">
+                      {offer.provider && (
+                        <div className="d-flex align-items-center gap-2">
+                          <CreditCard
+                            size={16}
+                            className="text-danger flex-shrink-0"
+                          />
+                          <span>{offer.provider}</span>
+                        </div>
+                      )}
+
+                      {Number(offer.discountAmount) > 0 && (
+                        <div className="d-flex align-items-center gap-2">
+                          <Tag
+                            size={16}
+                            className="text-danger flex-shrink-0"
+                          />
+                          <span>
+                            Benefit: ₹
+                            {Number(offer.discountAmount).toLocaleString(
+                              'en-IN'
+                            )}
+                          </span>
+                        </div>
+                      )}
+
+                      {Number(offer.minPurchase) > 0 && (
+                        <div>
+                          Minimum purchase: ₹
+                          {Number(offer.minPurchase).toLocaleString('en-IN')}
+                        </div>
+                      )}
+
+                      {offer.tenureOptions && (
+                        <div>EMI tenure: {offer.tenureOptions}</div>
+                      )}
+
+                      {offer.downPayment && (
+                        <div>Down payment: {offer.downPayment}</div>
+                      )}
+
+                      {offer.processingFee && (
+                        <div>Processing fee: {offer.processingFee}</div>
+                      )}
+
+                      {offer.endDate && (
+                        <div className="d-flex align-items-center gap-2">
+                          <CalendarDays
+                            size={16}
+                            className="text-danger flex-shrink-0"
+                          />
+                          <span>
+                            Valid until {formatOfferDate(offer.endDate)}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+
+                    {offer.terms && (
+                      <p className="small text-muted border-top pt-3 mb-3">
+                        {offer.terms}
+                      </p>
+                    )}
+
+                    <Link
+                      to="/contact"
+                      className="btn btn-brand-outline btn-sm mt-auto align-self-start"
+                    >
+                      Ask about this offer
+                    </Link>
+                  </article>
+                </div>
+                ))}
+              </div>
+            )}
+          </div>
+      </section>
+
+      {/* Our Services */}
       <section className="py-5" id="services">
         <div className="container">
           <div className="text-center max-w-xl mx-auto mb-5">
-            <span className="badge-blush text-uppercase fw-bold mb-2 d-inline-block">Express Care & Assistance</span>
+            <span className="badge-blush text-uppercase fw-bold mb-2 d-inline-block">
+              Express Care &amp; Assistance
+            </span>
             <h2 className="fw-bold">Our Store Services</h2>
             <p className="text-muted">
-              Fast, dependable solutions by experienced technicians right in our shop showroom.
+              Fast, dependable solutions by experienced technicians right in our
+              shop showroom.
             </p>
           </div>
 
+          {servicesLoading && (
+            <div className="alert alert-light border d-flex align-items-center gap-3" role="status" aria-live="polite">
+              <span className="spinner-border spinner-border-sm text-danger" aria-hidden="true" />
+              <span>Loading store services…</span>
+            </div>
+          )}
+
+          {servicesError && !servicesLoading && (
+            <div className="alert alert-warning d-flex flex-column flex-sm-row align-items-sm-center justify-content-between gap-3" role="alert">
+              <span>We couldn’t load the store services. Please try again.</span>
+              <button type="button" className="btn btn-outline-dark btn-sm align-self-start align-self-sm-auto" onClick={() => void reloadServices()}>
+                Try again
+              </button>
+            </div>
+          )}
+
+          {!servicesLoading && !servicesError && services.length === 0 && (
+            <div className="alert alert-light border text-center" role="status">
+              Contact the store to learn about currently available services.
+            </div>
+          )}
+
+          {!servicesLoading && !servicesError && services.length > 0 && (
           <div className="row g-4">
-            {services.map((srv, idx) => {
-              const IconComp = srv.icon === 'Wrench' ? Wrench : srv.icon === 'Radio' ? Radio : Zap;
+            {services.map((service, index) => {
+              const IconComponent =
+                service.icon === 'Wrench'
+                  ? Wrench
+                  : service.icon === 'Radio'
+                    ? Radio
+                    : Zap;
+
               return (
-                <div key={srv.id || idx} className="col-12 col-md-4">
+                <div key={service.id || index} className="col-12 col-md-4">
                   <div className="custom-card h-100 p-4 d-flex flex-column">
                     <div
                       className="p-3 rounded-circle mb-3 d-inline-flex align-items-center justify-content-center"
@@ -285,27 +641,32 @@ export default function HomePage() {
                         color: 'var(--primary-red)'
                       }}
                     >
-                      <IconComp size={28} />
+                      <IconComponent size={28} />
                     </div>
 
-                    <h4 className="fw-bold mb-2">{srv.title}</h4>
-                    <p className="text-muted small mb-4">{srv.subtitle}</p>
+                    <h4 className="fw-bold mb-2">{service.title}</h4>
+                    <p className="text-muted small mb-4">{service.subtitle}</p>
 
                     <ul className="list-unstyled d-flex flex-column gap-2 mb-4 small text-muted">
-                      {srv.features?.map((feat, fIdx) => (
-                        <li key={fIdx} className="d-flex align-items-center gap-2">
+                      {asArray(service.features).map((feature, featureIndex) => (
+                        <li
+                          key={featureIndex}
+                          className="d-flex align-items-center gap-2"
+                        >
                           <span className="text-danger fw-bold">✓</span>
-                          <span>{feat}</span>
+                          <span>{feature}</span>
                         </li>
                       ))}
                     </ul>
 
                     <div className="mt-auto">
                       <Link
-                        to={`/contact?service=${encodeURIComponent(srv.enquiryService || srv.title)}`}
+                        to={`/contact?service=${encodeURIComponent(
+                          service.enquiryService || service.title
+                        )}`}
                         className="btn btn-brand-primary w-100"
                       >
-                        Enquire for {srv.title.split('&')[0].trim()}
+                        Enquire for {service.title.split('&')[0].trim()}
                       </Link>
                     </div>
                   </div>
@@ -313,10 +674,11 @@ export default function HomePage() {
               );
             })}
           </div>
+          )}
         </div>
       </section>
 
-      {/* Supporting Partner Area */}
+      {/* Authorized Store Retail Partnerships */}
       <section
         className="py-4 border-top border-bottom"
         style={{ backgroundColor: '#FFFFFF' }}
@@ -394,14 +756,14 @@ export default function HomePage() {
           <div className="text-center mt-3">
             <small className="text-muted" style={{ fontSize: '0.75rem' }}>
               Partnership descriptions are provided by the store. These links
-              lead to the companies’ official websites and do not confirm
-              stock integration or authorized repair-centre status.
+              lead to the companies’ official websites and do not confirm stock
+              integration or authorized repair-centre status.
             </small>
           </div>
         </div>
       </section>
 
-      {/* 7. About Us Preview */}
+      {/* About Us Preview */}
       <section className="py-5" style={{ backgroundColor: 'var(--secondary-bg)' }}>
         <div className="container">
           <div className="row align-items-center g-4">
@@ -411,26 +773,36 @@ export default function HomePage() {
                 style={{
                   minHeight: '320px',
                   backgroundColor: '#B72E35',
-                  backgroundImage: 'radial-gradient(circle at 100% 0%, #96232A 0%, #B72E35 100%)'
+                  backgroundImage:
+                    'radial-gradient(circle at 100% 0%, #96232A 0%, #B72E35 100%)'
                 }}
               >
                 <div className="position-relative" style={{ zIndex: 2 }}>
-                  <span className="badge bg-white text-danger fw-bold mb-3">Shop Showroom</span>
+                  <span className="badge bg-white text-danger fw-bold mb-3">
+                    Shop Showroom
+                  </span>
                   <h3 className="fw-bold text-white mb-3">Muganiyaa-Mobiles</h3>
                   <p className="text-white-50" style={{ lineHeight: '1.6' }}>
-                    A dedicated retail storefront where you can physically test devices, compare display quality, receive genuine invoice warranties, and walk in for honest technical repairs.
+                    A dedicated retail storefront where you can physically test
+                    devices, compare display quality, receive genuine invoice
+                    warranties, and walk in for honest technical repairs.
                   </p>
+
                   <div className="row g-3 mt-2">
                     <div className="col-6">
                       <div className="bg-white bg-opacity-10 p-2 rounded">
                         <div className="fw-bold fs-5">100%</div>
-                        <small className="text-white-50">Genuine Devices</small>
+                        <small className="text-white-50">
+                          Genuine Devices
+                        </small>
                       </div>
                     </div>
                     <div className="col-6">
                       <div className="bg-white bg-opacity-10 p-2 rounded">
                         <div className="fw-bold fs-5">15 Min</div>
-                        <small className="text-white-50">SIM & MNP Porting</small>
+                        <small className="text-white-50">
+                          SIM &amp; MNP Porting
+                        </small>
                       </div>
                     </div>
                   </div>
@@ -439,8 +811,12 @@ export default function HomePage() {
             </div>
 
             <div className="col-12 col-lg-6">
-              <span className="text-uppercase fw-bold text-danger small">About Our Shop</span>
-              <h2 className="fw-bold mb-3">{content.aboutUs?.title || 'Welcome to Muganiyaa-Mobiles'}</h2>
+              <span className="text-uppercase fw-bold text-danger small">
+                About Our Shop
+              </span>
+              <h2 className="fw-bold mb-3">
+                {content.aboutUs?.title || 'Welcome to Muganiyaa-Mobiles'}
+              </h2>
               <p className="text-muted" style={{ lineHeight: '1.7' }}>
                 {content.aboutUs?.description?.substring(0, 320) ||
                   'Muganiyaa-Mobiles is your trusted local destination for smartphones, audio, TVs, and appliances. We provide honest product guidance and fast in-store services.'}
@@ -459,26 +835,27 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* 8. Contact Us Preview */}
+      {/* Contact Us Preview */}
       <section className="py-5 bg-white">
         <div className="container">
           <div
             className="card border p-4 p-md-5 rounded-4"
-            style={{ borderColor: 'var(--border-color)', backgroundColor: '#FFFFFF' }}
+            style={{
+              borderColor: 'var(--border-color)',
+              backgroundColor: '#FFFFFF'
+            }}
           >
             <div className="row align-items-center g-4">
               <div className="col-12 col-lg-7">
                 <span className="badge-blush text-uppercase fw-bold mb-2 d-inline-block">
                   Need Instant Assistance?
                 </span>
-
                 <h3 className="fw-bold text-dark mb-2">
                   Speak Directly with Our Store Staff
                 </h3>
-
                 <p className="text-muted mb-4">
-                  Check immediate variant stock, ask for screen repair estimates, or
-                  enquire about finance documents.
+                  Check immediate variant stock, ask for screen repair estimates,
+                  or enquire about finance documents.
                 </p>
 
                 <div className="d-flex flex-column gap-3 text-muted small">
@@ -526,3 +903,8 @@ export default function HomePage() {
     </div>
   );
 }
+
+
+
+
+

@@ -1,5 +1,6 @@
-import "@supabase/functions-js/edge-runtime.d.ts";
-import { withSupabase } from "@supabase/server";
+import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import { withSupabase } from "npm:@supabase/server";
+import { createClient } from "npm:@supabase/supabase-js@2";
 
 type ChatMessage = {
   role?: string;
@@ -7,17 +8,21 @@ type ChatMessage = {
   text?: string;
 };
 
-type RateLimitBucket = {
-  count: number;
-  windowStartedAt: number;
+type ChatRequest = {
+  message?: unknown;
+  history?: unknown;
 };
 
-const RATE_LIMIT = 10;
-const RATE_WINDOW_MS = 60_000;
-const MAX_REQUEST_BYTES = 20_000;
+type RankedProduct = {
+  row: any;
+  category: any;
+  variants: any[];
+  specifications: any[];
+  images: string[];
+  score: number;
+};
 
-const requestBuckets = new Map<string, RateLimitBucket>();
-let requestsSinceCleanup = 0;
+const MAX_REQUEST_BYTES = 20_000;
 
 function getMessageText(message: ChatMessage): string {
   return String(message.content || message.text || "").trim();
@@ -31,48 +36,61 @@ function getSearchWords(value: string): string[] {
     .filter((word) => word.length > 1);
 }
 
-function getClientIp(req: Request): string {
-  const forwardedFor = req.headers.get("x-forwarded-for");
-  const firstForwardedIp = forwardedFor?.split(",")[0]?.trim();
+async function makeFingerprint(ip: string): Promise<string> {
+  const bytes = await crypto.subtle.digest(
+    "SHA-256",
+    new TextEncoder().encode(ip),
+  );
 
-  return req.headers.get("cf-connecting-ip") || firstForwardedIp || "unknown";
+  return Array.from(new Uint8Array(bytes), (byte) =>
+    byte.toString(16).padStart(2, "0")
+  ).join("");
 }
 
-function checkRateLimit(clientIp: string): {
-  allowed: boolean;
-  retryAfterSeconds?: number;
-} {
-  const now = Date.now();
-  const bucket = requestBuckets.get(clientIp);
+class RequestBodyTooLargeError extends Error {
+  constructor() {
+    super("BODY_TOO_LARGE");
+  }
+}
 
-  if (!bucket || now - bucket.windowStartedAt >= RATE_WINDOW_MS) {
-    requestBuckets.set(clientIp, {
-      count: 1,
-      windowStartedAt: now,
-    });
-  } else if (bucket.count >= RATE_LIMIT) {
-    return {
-      allowed: false,
-      retryAfterSeconds: Math.max(
-        1,
-        Math.ceil((RATE_WINDOW_MS - (now - bucket.windowStartedAt)) / 1000),
-      ),
-    };
-  } else {
-    bucket.count += 1;
+async function readLimitedBody(
+  req: Request,
+  maxBytes: number,
+): Promise<string> {
+  const reader = req.body?.getReader();
+
+  if (!reader) {
+    throw new Error("EMPTY_BODY");
   }
 
-  requestsSinceCleanup += 1;
-  if (requestsSinceCleanup >= 100) {
-    for (const [ip, entry] of requestBuckets.entries()) {
-      if (now - entry.windowStartedAt >= RATE_WINDOW_MS) {
-        requestBuckets.delete(ip);
-      }
+  const chunks: Uint8Array[] = [];
+  let totalBytes = 0;
+
+  while (true) {
+    const { done, value } = await reader.read();
+
+    if (done) break;
+    if (!value) continue;
+
+    totalBytes += value.byteLength;
+
+    if (totalBytes > maxBytes) {
+      await reader.cancel();
+      throw new RequestBodyTooLargeError();
     }
-    requestsSinceCleanup = 0;
+
+    chunks.push(value);
   }
 
-  return { allowed: true };
+  const bodyBytes = new Uint8Array(totalBytes);
+  let offset = 0;
+
+  for (const chunk of chunks) {
+    bodyBytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+
+  return new TextDecoder().decode(bodyBytes);
 }
 
 function publicImageUrl(
@@ -82,8 +100,27 @@ function publicImageUrl(
   if (!storagePath) return "";
   if (/^https?:\/\//i.test(storagePath)) return storagePath;
 
-  const { data } = storage.from("product-images").getPublicUrl(storagePath);
+  const { data } = storage
+    .from("product-images")
+    .getPublicUrl(storagePath);
+
   return data?.publicUrl || "";
+}
+
+function getSupabaseAdminClient() {
+  const supabaseUrl = Deno.env.get("SUPABASE_URL");
+  const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+
+  if (!supabaseUrl || !serviceRoleKey) {
+    return null;
+  }
+
+  return createClient(supabaseUrl, serviceRoleKey, {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false,
+    },
+  });
 }
 
 export default {
@@ -98,38 +135,109 @@ export default {
           );
         }
 
+        // Reject oversized requests early when Content-Length is available.
+        // The streamed body check below also handles missing or inaccurate headers.
         const contentLength = Number(req.headers.get("content-length") || 0);
+
         if (contentLength > MAX_REQUEST_BYTES) {
           return Response.json(
-            { error: "The chat request is too large. Please shorten it and try again." },
+            {
+              error:
+                "The chat request is too large. Please shorten it and try again.",
+            },
             { status: 413 },
           );
         }
 
-        const rateLimit = checkRateLimit(getClientIp(req));
-        if (!rateLimit.allowed) {
-          return Response.json(
-            { error: "Too many messages. Please wait a minute and try again." },
-            {
-              status: 429,
-              headers: {
-                "Retry-After": String(rateLimit.retryAfterSeconds || 60),
-              },
-            },
+        // Use the trusted proxy header in production. For local Supabase only,
+        // use one shared development bucket if that header is unavailable.
+        const supabaseUrl = Deno.env.get("SUPABASE_URL") || "";
+        const isLocalSupabase =
+          /localhost|127\.0\.0\.1|:\/\/kong(?::|\/)|supabase_kong_/i.test(
+            supabaseUrl,
           );
-        }
 
-        const apiKey = Deno.env.get("GEMINI_API_KEY");
-        if (!apiKey) {
+        const clientIp =
+          req.headers.get("cf-connecting-ip")?.trim() ||
+          (isLocalSupabase ? "local-development" : null);
+
+        if (!clientIp) {
+          console.error(
+            "Chat request rejected: trusted client IP header is missing.",
+          );
+
           return Response.json(
-            { error: "The assistant is not configured yet." },
+            { error: "Could not verify the request source." },
             { status: 503 },
           );
         }
 
-        let body: { message?: unknown; history?: unknown };
+        const adminClient = getSupabaseAdminClient();
+
+        if (!adminClient) {
+          console.error("Supabase server credentials are unavailable.");
+
+          return Response.json(
+            { error: "The assistant is temporarily unavailable." },
+            { status: 503 },
+          );
+        }
+
+        const fingerprint = await makeFingerprint(clientIp);
+        const { data: allowed, error: rateLimitError } = await adminClient.rpc(
+          "consume_chat_rate_limit",
+          { p_fingerprint: fingerprint },
+        );
+
+        if (rateLimitError) {
+          console.error(
+            "Chat rate-limit check failed:",
+            rateLimitError.message,
+          );
+
+          return Response.json(
+            { error: "The assistant is temporarily unavailable." },
+            { status: 503 },
+          );
+        }
+
+        if (!allowed) {
+          return Response.json(
+            {
+              error: "Too many messages. Please wait a minute and try again.",
+            },
+            {
+              status: 429,
+              headers: { "Retry-After": "60" },
+            },
+          );
+        }
+
+        let rawBody: string;
+
         try {
-          body = await req.json();
+          rawBody = await readLimitedBody(req, MAX_REQUEST_BYTES);
+        } catch (error) {
+          if (error instanceof RequestBodyTooLargeError) {
+            return Response.json(
+              {
+                error:
+                  "The chat request is too large. Please shorten it and try again.",
+              },
+              { status: 413 },
+            );
+          }
+
+          return Response.json(
+            { error: "The request body must be valid JSON." },
+            { status: 400 },
+          );
+        }
+
+        let body: ChatRequest;
+
+        try {
+          body = JSON.parse(rawBody);
         } catch {
           return Response.json(
             { error: "The request body must be valid JSON." },
@@ -137,9 +245,18 @@ export default {
           );
         }
 
-        const message = String(body.message || "").trim();
+        const message =
+          typeof body.message === "string" ? body.message.trim() : "";
+
         const history = Array.isArray(body.history)
-          ? (body.history as ChatMessage[]).slice(-8)
+          ? body.history
+              .filter(
+                (item): item is ChatMessage =>
+                  Boolean(item) &&
+                  typeof item === "object" &&
+                  !Array.isArray(item),
+              )
+              .slice(-8)
           : [];
 
         if (!message) {
@@ -153,6 +270,17 @@ export default {
           return Response.json(
             { error: "Please keep your message under 1000 characters." },
             { status: 400 },
+          );
+        }
+
+        const apiKey = Deno.env.get("GEMINI_API_KEY");
+
+        if (!apiKey) {
+          console.error("GEMINI_API_KEY is not configured.");
+
+          return Response.json(
+            { error: "The assistant is not configured yet." },
+            { status: 503 },
           );
         }
 
@@ -174,28 +302,37 @@ export default {
             .eq("is_active", true)
             .eq("status", "active")
             .order("name"),
-          ctx.supabase.from("categories").select("id, name, slug"),
+
+          ctx.supabase
+            .from("categories")
+            .select("id, name, slug"),
+
           ctx.supabase
             .from("product_variants")
             .select(
               "id, product_id, sku, color_name, color_hex, ram, storage, price, original_price, stock_quantity, is_available",
             ),
+
           ctx.supabase
             .from("product_images")
             .select("product_id, storage_path, sort_order, is_primary")
             .order("sort_order"),
+
           ctx.supabase
             .from("product_specifications")
             .select("product_id, group_name, name, value, sort_order")
             .order("sort_order"),
+
           ctx.supabase
             .from("offers")
             .select(
               "id, title, offer_type, discount_value, start_at, end_at, terms, is_active",
             )
             .eq("is_active", true),
+
           // Select all service columns because the table does not have a "title" column.
           ctx.supabase.from("services").select("*"),
+
           ctx.supabase
             .from("store_settings")
             .select("phone, whatsapp, email, address, opening_hours, map_url")
@@ -219,8 +356,12 @@ export default {
             "Store information query failed:",
             failedQuery.error.message,
           );
+
           return Response.json(
-            { error: "I couldn't load the store information. Please try again." },
+            {
+              error:
+                "I couldn't load the store information. Please try again.",
+            },
             { status: 500 },
           );
         }
@@ -241,15 +382,15 @@ export default {
               ? new Date(offer.end_at).getTime()
               : null;
 
-            return (!startsAt || startsAt <= now) && (!endsAt || endsAt >= now);
+            return (!startsAt || startsAt <= now) &&
+              (!endsAt || endsAt >= now);
           })
           .map((offer) => ({
             title: offer.title || "",
             type: offer.offer_type || "",
-            discountValue:
-              offer.discount_value == null
-                ? null
-                : Number(offer.discount_value),
+            discountValue: offer.discount_value == null
+              ? null
+              : Number(offer.discount_value),
             startsAt: offer.start_at,
             endsAt: offer.end_at,
             terms: offer.terms || "",
@@ -286,7 +427,7 @@ export default {
 
         const words = getSearchWords(message);
 
-        const rankedProducts = products
+        const rankedProducts: RankedProduct[] = products
           .map((product) => {
             const category = categories.find(
               (item) => item.id === product.category_id,
@@ -468,7 +609,10 @@ export default {
           console.error("Gemini request failed:", errorText);
 
           return Response.json(
-            { error: "The assistant couldn't respond right now. Please try again." },
+            {
+              error:
+                "The assistant couldn't respond right now. Please try again.",
+            },
             { status: 502 },
           );
         }
@@ -491,7 +635,10 @@ export default {
           console.error("Gemini returned invalid JSON.");
 
           return Response.json(
-            { error: "The assistant returned an unreadable response. Please try again." },
+            {
+              error:
+                "The assistant returned an unreadable response. Please try again.",
+            },
             { status: 502 },
           );
         }
@@ -516,7 +663,9 @@ export default {
               color: variant.color_name || "",
               ram: variant.ram || "",
               storage: variant.storage || "",
-              sellingPrice: Number(variant.price || item.row.base_price || 0),
+              sellingPrice: Number(
+                variant.price || item.row.base_price || 0,
+              ),
               originalPrice: Number(
                 variant.original_price ??
                   item.row.original_price ??
@@ -531,7 +680,10 @@ export default {
             }));
 
             const specs = Object.fromEntries(
-              item.specifications.map((spec: any) => [spec.name, spec.value]),
+              item.specifications.map((spec: any) => [
+                spec.name,
+                spec.value,
+              ]),
             );
 
             return {
@@ -563,7 +715,9 @@ export default {
           });
 
         return Response.json({
-          text: String(aiResult.reply || "How can I help you find a product?"),
+          text: String(
+            aiResult.reply || "How can I help you find a product?",
+          ),
           products: recommendedProducts,
           cta: null,
           contact: aiResult.showContactLinks ? publicContact : null,

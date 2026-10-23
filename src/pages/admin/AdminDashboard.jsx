@@ -14,20 +14,58 @@ import {
 } from 'lucide-react';
 import { useData } from '../../context/DataContext';
 
-export default function AdminDashboard() {
-  const { db, publishedProducts, activeOffers } = useData();
+function formatEnquiryDate(value) {
+  const date = value ? new Date(value) : null;
+  if (!date || !Number.isFinite(date.getTime())) return '—';
 
-  const allProducts = db.products || [];
-  const publishedCount = publishedProducts.length;
-  const draftCount = allProducts.length - publishedCount;
-  const activeOffersCount = activeOffers.length;
-  const allOffers = db.offers || [];
-  const enquiries = db.enquiries || [];
-  const newEnquiriesCount = enquiries.filter((enquiry) => enquiry.status === 'New').length;
-  const recentEnquiries = enquiries.slice(0, 5);
+  return date.toLocaleDateString('en-IN', {
+    month: 'short',
+    day: 'numeric'
+  });
+}
+
+export default function AdminDashboard() {
+  const { db, publishedProducts, activeOffers, isLoading = false, loadError = null } = useData();
+
+  const safeDb = db && typeof db === 'object' ? db : {};
+  const allProducts = Array.isArray(safeDb.products) ? safeDb.products : [];
+  const published = Array.isArray(publishedProducts) ? publishedProducts : [];
+  const offers = Array.isArray(safeDb.offers) ? safeDb.offers : [];
+  const active = Array.isArray(activeOffers) ? activeOffers : [];
+  const enquiries = Array.isArray(safeDb.enquiries) ? safeDb.enquiries : [];
+  const categories = Array.isArray(safeDb.categories) ? safeDb.categories : [];
+
+  const publishedCount = published.length;
+  const draftCount = Math.max(0, allProducts.length - publishedCount);
+  const activeOffersCount = active.length;
+  const newEnquiriesCount = enquiries.filter(
+    (enquiry) => enquiry?.status === 'New'
+  ).length;
+  const recentEnquiries = [...enquiries]
+    .sort((first, second) => {
+      const firstDate = new Date(first?.createdAt || 0).getTime();
+      const secondDate = new Date(second?.createdAt || 0).getTime();
+      return (Number.isFinite(secondDate) ? secondDate : 0) -
+        (Number.isFinite(firstDate) ? firstDate : 0);
+    })
+    .slice(0, 5);
+
+  if (isLoading) {
+    return (
+      <div className="min-vh-50 d-flex align-items-center justify-content-center gap-2 text-muted" role="status" aria-live="polite">
+        <span className="spinner-border spinner-border-sm" aria-hidden="true" />
+        <span>Loading store dashboard…</span>
+      </div>
+    );
+  }
 
   return (
     <div className="admin-dashboard">
+      {loadError && (
+        <div className="alert alert-warning" role="alert">
+          Dashboard data could not be fully loaded. Refresh the page and try again.
+        </div>
+      )}
       <div className="d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-3 mb-4">
         <div>
           <h2 className="fw-bold text-dark mb-1 fs-3">Store Dashboard</h2>
@@ -95,7 +133,7 @@ export default function AdminDashboard() {
             <div className="fs-3 fw-bold text-dark">{activeOffersCount}</div>
 
             <small className="text-muted mt-1 d-block">
-              {allOffers.length - activeOffersCount} Expired or Inactive
+              {Math.max(0, offers.length - activeOffersCount)} Expired or Inactive
             </small>
           </div>
         </div>
@@ -139,7 +177,7 @@ export default function AdminDashboard() {
             </div>
 
             <div className="fs-3 fw-bold text-dark">
-              {(db.categories || []).length}
+              {categories.length}
             </div>
 
             <small className="text-muted mt-1 d-block">
@@ -248,7 +286,9 @@ export default function AdminDashboard() {
 
         {recentEnquiries.length === 0 ? (
           <div className="p-4 text-center text-muted small">
-            No enquiries received yet.
+            <Inbox size={24} className="mb-2 opacity-50" aria-hidden="true" />
+            <p className="mb-2">No enquiries received yet. New customer submissions will appear here.</p>
+            <Link to="/store-owner-7f3c9a2e6b41d805/enquiries" className="btn btn-outline-secondary btn-sm">Open enquiries</Link>
           </div>
         ) : (
           <div className="table-responsive">
@@ -302,10 +342,7 @@ export default function AdminDashboard() {
                     </td>
 
                     <td className="text-muted small">
-                      {new Date(enquiry.createdAt).toLocaleDateString('en-IN', {
-                        month: 'short',
-                        day: 'numeric'
-                      })}
+                      {formatEnquiryDate(enquiry.createdAt)}
                     </td>
 
                     <td className="text-end">
@@ -327,3 +364,5 @@ export default function AdminDashboard() {
     </div>
   );
 }
+
+
