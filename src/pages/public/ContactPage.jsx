@@ -24,7 +24,7 @@ function createRequestId() {
 
 export default function ContactPage() {
   const [searchParams] = useSearchParams();
-  const { db, addEnquiry } = useData();
+  const { db, addEnquiry, contactSettingsLoading, contactSettingsError, reloadContactSettings } = useData();
 
   // Retain this ID after a failed request so retrying the same enquiry can be
   // recognized by the server as the same submission.
@@ -247,7 +247,20 @@ export default function ContactPage() {
                 Showroom Information
               </h4>
 
-              <div className="d-flex flex-column gap-3 text-muted">
+              {contactSettingsLoading ? (
+                <div className="d-flex align-items-center gap-2 text-muted small py-2" role="status">
+                  <span className="spinner-border spinner-border-sm text-danger" aria-hidden="true" />
+                  Loading showroom details…
+                </div>
+              ) : contactSettingsError ? (
+                <div className="alert alert-danger d-flex flex-column gap-2 mb-0" role="alert">
+                  <span>{contactSettingsError}</span>
+                  <button type="button" className="btn btn-outline-danger btn-sm align-self-start" onClick={() => void reloadContactSettings()}>
+                    Retry contact details
+                  </button>
+                </div>
+              ) : (
+                <div className="d-flex flex-column gap-3 text-muted">
                 <div className="d-flex align-items-start gap-3">
                   <div className="p-2 rounded-circle bg-light text-danger flex-shrink-0">
                     <MapPin size={20} />
@@ -307,16 +320,17 @@ export default function ContactPage() {
                   </div>
                 </div>
               </div>
+              )}
 
               <div className="mt-4 pt-3 border-top">
                 <a
-                  href={`https://wa.me/${contact.whatsapp?.replace(/[^0-9]/g, '') || ''}`}
+                  href={hasWhatsappNumber ? `https://wa.me/${whatsappNumber}` : undefined}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="btn btn-outline-success w-100 d-flex align-items-center justify-content-center gap-2 fw-semibold"
-                  aria-disabled={!contact.whatsapp}
+                  aria-disabled={!hasWhatsappNumber}
                   onClick={(event) => {
-                    if (!contact.whatsapp) event.preventDefault();
+                    if (!hasWhatsappNumber) event.preventDefault();
                   }}
                 >
                   <MessageCircle size={18} />
@@ -653,4 +667,5 @@ export default function ContactPage() {
     </div>
   );
 }
+
 

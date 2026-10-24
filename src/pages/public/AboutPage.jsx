@@ -27,12 +27,48 @@ function getPartnerUrl(partner) {
 }
 
 export default function AboutPage() {
-  const { db } = useData();
-  const content = db.websiteContent || {};
+  const { db, websiteContentLoading, websiteContentError, reloadWebsiteContent, contactSettingsLoading, contactSettingsError, reloadContactSettings } = useData();
+  const content = db?.websiteContent || {};
   const about = content.aboutUs || {};
-  const partners = content.partners || [];
-  const contact = db.contactSettings || {};
+  const partners = Array.isArray(content.partners) ? content.partners : [];
+  const contact = db?.contactSettings || {};
 
+  if (websiteContentLoading || contactSettingsLoading) {
+    return (
+      <main className="container py-5">
+        <div className="card p-5 text-center border rounded-4 bg-white shadow-sm" role="status">
+          <div className="spinner-border text-danger mx-auto mb-3" aria-hidden="true" />
+          <p className="text-muted mb-0">Loading store information…</p>
+        </div>
+      </main>
+    );
+  }
+
+  if (websiteContentError || contactSettingsError) {
+    return (
+      <main className="container py-5">
+        <div className="card p-4 p-md-5 border rounded-4 bg-white shadow-sm">
+          <h1 className="h3 fw-bold mb-3">Store information could not be loaded</h1>
+          <p className="text-muted">Please check your connection and try loading the information again.</p>
+          {websiteContentError && (
+            <div className="alert alert-danger d-flex flex-column flex-sm-row align-items-sm-center justify-content-between gap-3" role="alert">
+              <span>{websiteContentError}</span>
+              <button type="button" className="btn btn-outline-danger btn-sm" onClick={() => void reloadWebsiteContent()}>Retry website content</button>
+            </div>
+          )}
+          {contactSettingsError && (
+            <div className="alert alert-danger d-flex flex-column flex-sm-row align-items-sm-center justify-content-between gap-3" role="alert">
+              <span>{contactSettingsError}</span>
+              <button type="button" className="btn btn-outline-danger btn-sm" onClick={() => void reloadContactSettings()}>Retry contact details</button>
+            </div>
+          )}
+          <div className="mt-2">
+            <Link to="/" className="btn btn-brand-outline btn-sm">Return home</Link>
+          </div>
+        </div>
+      </main>
+    );
+  }
   return (
     <div className="about-page pb-5">
       {/* Page Header */}

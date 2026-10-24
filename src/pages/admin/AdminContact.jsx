@@ -3,15 +3,15 @@ import { Save, CheckCircle2, Phone, Mail, MapPin, Clock, ExternalLink } from 'lu
 import { useData } from '../../context/DataContext';
 
 export default function AdminContact() {
-  const { db, updateContactSettings } = useData();
-  const [settings, setSettings] = useState(db.contactSettings || {});
+  const { db, updateContactSettings, contactSettingsLoading, contactSettingsError, reloadContactSettings } = useData();
+  const [settings, setSettings] = useState(db?.contactSettings || {});
   const [savedSuccess, setSavedSuccess] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState('');
 
   useEffect(() => {
-    setSettings(db.contactSettings || {});
-  }, [db.contactSettings]);
+    setSettings(db?.contactSettings || {});
+  }, [db?.contactSettings]);
 
   const handleSave = async (e) => {
     e.preventDefault();
@@ -24,7 +24,7 @@ export default function AdminContact() {
       setTimeout(() => setSavedSuccess(false), 3000);
     } catch (error) {
       console.error('Could not save showroom settings:', error);
-      setSaveError(error.message || 'Could not save showroom settings.');
+      setSaveError(error?.message || 'Could not save showroom settings. Please try again.');
     } finally {
       setIsSaving(false);
     }
@@ -40,7 +40,7 @@ export default function AdminContact() {
           </p>
         </div>
 
-        <button type="button" className="btn btn-brand-primary btn-sm d-inline-flex align-items-center gap-1" onClick={handleSave} disabled={isSaving}>
+        <button type="submit" form="contact-settings-form" className="btn btn-brand-primary btn-sm d-inline-flex align-items-center gap-1" disabled={isSaving || contactSettingsLoading || Boolean(contactSettingsError)}>
           <Save size={16} />
           <span>{isSaving ? 'Saving…' : 'Save Contact Settings'}</span>
         </button>
@@ -49,13 +49,26 @@ export default function AdminContact() {
       {saveError && <div className="alert alert-danger" role="alert">{saveError}</div>}
 
       {savedSuccess && (
-        <div className="alert alert-success d-flex align-items-center gap-2 mb-4 shadow-sm">
+        <div className="alert alert-success d-flex align-items-center gap-2 mb-4 shadow-sm" role="status">
           <CheckCircle2 size={18} />
           <span>Contact details, hours, and map link saved to Supabase.</span>
         </div>
       )}
 
-      <form onSubmit={handleSave}>
+      {contactSettingsLoading ? (
+        <div className="card p-5 text-center border rounded-4 bg-white shadow-sm" role="status">
+          <div className="spinner-border text-danger mx-auto mb-3" aria-hidden="true" />
+          <p className="text-muted mb-0">Loading contact settings…</p>
+        </div>
+      ) : contactSettingsError ? (
+        <div className="alert alert-danger d-flex flex-column flex-sm-row align-items-sm-center justify-content-between gap-3" role="alert">
+          <span>{contactSettingsError}</span>
+          <button type="button" className="btn btn-outline-danger btn-sm" onClick={() => void reloadContactSettings()}>
+            Try again
+          </button>
+        </div>
+      ) : (
+      <form id="contact-settings-form" onSubmit={handleSave}>
         <div className="card p-4 border rounded-4 bg-white shadow-sm" style={{ borderColor: 'var(--border-color)' }}>
           <div className="row g-4">
             <div className="col-12 col-md-6">
@@ -98,7 +111,7 @@ export default function AdminContact() {
               <input
                 type="email"
                 className="form-control"
-                placeholder="contact@muganiyaamobiles.demo"
+                placeholder="e.g. store@example.com"
                 value={settings.email || ''}
                 onChange={(e) => setSettings({ ...settings, email: e.target.value })}
               />
@@ -127,7 +140,7 @@ export default function AdminContact() {
               <textarea
                 rows={2}
                 className="form-control"
-                placeholder="Main Bazaar Road, Near Clock Tower, Demo City, Tamil Nadu 600001"
+                placeholder="Enter the verified showroom address"
                 value={settings.address || ''}
                 onChange={(e) => setSettings({ ...settings, address: e.target.value })}
                 required
@@ -163,6 +176,9 @@ export default function AdminContact() {
           </div>
         </div>
       </form>
+      )}
     </div>
   );
 }
+
+

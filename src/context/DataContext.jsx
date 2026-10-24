@@ -16,6 +16,37 @@ import { isSupabaseConfigured, supabase } from '../services/supabaseClient';
 
 const DataContext = createContext(null);
 
+// Sample data is available only for local development without Supabase.
+// A configured local or hosted Supabase instance always starts from empty
+// state and gets its data from the database.
+const useLocalSampleData = import.meta.env.DEV && !isSupabaseConfigured;
+const isProductionBuild = import.meta.env.PROD;
+
+function createEmptyDatabase() {
+  return {
+    version: '1.0.0',
+    products: [],
+    categories: [],
+    brands: [],
+    offers: [],
+    banners: [],
+    services: [],
+    websiteContent: {},
+    chatbotSettings: {},
+    contactSettings: {
+      shopName: 'Muganiyaa-Mobiles',
+      phone: '',
+      whatsapp: '',
+      email: '',
+      address: '',
+      hours: '',
+      mapQuery: '',
+      mapUrl: ''
+    },
+    enquiries: []
+  };
+}
+
 function mapStoreSettings(row, fallback = {}) {
   const openingHours = row?.opening_hours;
   const hoursText =
@@ -145,30 +176,56 @@ function mapOfferFromRow(row) {
 }
 export function DataProvider({ children }) {
   const [db, setDb] = useState(() => {
-    const saved = loadDatabase();
+    const initialDatabase = useLocalSampleData
+      ? loadDatabase()
+      : createEmptyDatabase();
 
     // Enquiries can contain personal information. Never restore saved enquiry
     // records from this browser, whether Supabase is configured or not.
     return {
-      ...saved,
-      enquiries: [],
-      ...(isSupabaseConfigured ? { products: [], categories: [] } : {})
+      ...initialDatabase,
+      enquiries: []
     };
   });
 
   const [catalogLoading, setCatalogLoading] = useState(isSupabaseConfigured);
-  const [catalogError, setCatalogError] = useState('');
+  const [catalogError, setCatalogError] = useState(
+    !isSupabaseConfigured && isProductionBuild
+      ? 'The store catalogue is temporarily unavailable.'
+      : ''
+  );
   const [bannersLoading, setBannersLoading] = useState(Boolean(supabase));
-  const [bannersError, setBannersError] = useState('');
+  const [bannersError, setBannersError] = useState(
+    !supabase && isProductionBuild ? 'Homepage content is temporarily unavailable.' : ''
+  );
   const [servicesLoading, setServicesLoading] = useState(Boolean(supabase));
-  const [servicesError, setServicesError] = useState('');
+  const [servicesError, setServicesError] = useState(
+    !supabase && isProductionBuild ? 'Store services are temporarily unavailable.' : ''
+  );
   const [offersLoading, setOffersLoading] = useState(Boolean(supabase));
-  const [offersError, setOffersError] = useState('');
+  const [offersError, setOffersError] = useState(
+    !supabase && isProductionBuild ? 'Current offers are temporarily unavailable.' : ''
+  );
+  const [enquiriesLoading, setEnquiriesLoading] = useState(Boolean(supabase));
+  const [enquiriesError, setEnquiriesError] = useState(
+    !supabase && isProductionBuild ? 'Enquiries are temporarily unavailable.' : ''
+  );
+  const [websiteContentLoading, setWebsiteContentLoading] = useState(Boolean(supabase));
+  const [websiteContentError, setWebsiteContentError] = useState(
+    !supabase && isProductionBuild ? 'Website content is temporarily unavailable.' : ''
+  );
+  const [contactSettingsLoading, setContactSettingsLoading] = useState(Boolean(supabase));
+  const [contactSettingsError, setContactSettingsError] = useState(
+    !supabase && isProductionBuild ? 'Contact details are temporarily unavailable.' : ''
+  );
 
   // Load the public catalogue from Supabase and expose its loading/error state.
   useEffect(() => {
     if (!isSupabaseConfigured) {
       setCatalogLoading(false);
+      if (isProductionBuild) {
+        setCatalogError('The store catalogue is not configured yet.');
+      }
       return undefined;
     }
 
@@ -176,7 +233,7 @@ export function DataProvider({ children }) {
     setCatalogLoading(true);
     setCatalogError('');
 
-    fetchSupabaseCatalog(loadDatabase())
+    fetchSupabaseCatalog({})
       .then((catalogue) => {
         if (catalogue && !cancelled) {
           setDb((current) => ({ ...current, ...catalogue }));
@@ -200,13 +257,19 @@ export function DataProvider({ children }) {
     };
   }, []);
 
-  // Load enquiries for the admin inbox and subscribe to live changes.
-  useEffect(() => {
-    if (!supabase) return undefined;
+  const reloadEnquiries = useCallback(async () => {
+    if (!supabase) {
+      setEnquiriesLoading(false);
+      setEnquiriesError(
+        isProductionBuild ? 'Enquiries are temporarily unavailable.' : ''
+      );
+      return;
+    }
 
-    let cancelled = false;
+    setEnquiriesLoading(true);
+    setEnquiriesError('');
 
-    const loadEnquiries = async () => {
+    try {
       const { data, error } = await supabase
         .from('enquiries')
         .select(
@@ -216,21 +279,32 @@ export function DataProvider({ children }) {
 
       if (error) throw error;
 
-      if (!cancelled) {
-        setDb((current) => ({
-          ...current,
-          enquiries: (data || []).map(mapSupabaseEnquiry)
-        }));
-      }
-    };
+      setDb((current) => ({
+        ...current,
+        enquiries: (data || []).map(mapSupabaseEnquiry)
+      }));
+    } catch (error) {
+      console.error('Could not load enquiries from Supabase:', error.message);
+      setEnquiriesError('Enquiries could not be loaded. Please try again.');
+      throw error;
+    } finally {
+      setEnquiriesLoading(false);
+    }
+  }, []);
 
+  // Load the admin inbox after startup and refresh it after auth or live changes.
+  useEffect(() => {
+    if (!supabase) {
+      setEnquiriesLoading(false);
+      setEnquiriesError(
+        isProductionBuild ? 'Enquiries are temporarily unavailable.' : ''
+      );
+      return undefined;
+    }
+
+    let cancelled = false;
     const refreshEnquiries = () => {
-      loadEnquiries().catch((error) => {
-        console.error(
-          'Could not load enquiries from Supabase:',
-          error.message
-        );
-      });
+      if (!cancelled) void reloadEnquiries().catch(() => {});
     };
 
     refreshEnquiries();
@@ -241,7 +315,6 @@ export function DataProvider({ children }) {
           session &&
           ['INITIAL_SESSION', 'SIGNED_IN', 'TOKEN_REFRESHED'].includes(event)
         ) {
-          // Run after Supabase finishes updating the auth state.
           setTimeout(() => {
             if (!cancelled) refreshEnquiries();
           }, 0);
@@ -286,40 +359,55 @@ export function DataProvider({ children }) {
       authListener.subscription.unsubscribe();
       supabase.removeChannel(channel);
     };
+  }, [reloadEnquiries]);
+
+  // Load showroom settings from Supabase and expose loading, error, and retry state.
+  const reloadContactSettings = useCallback(async () => {
+    if (!supabase) {
+      setContactSettingsLoading(false);
+      setContactSettingsError(
+        isProductionBuild ? 'Contact details are temporarily unavailable.' : ''
+      );
+      return;
+    }
+
+    setContactSettingsLoading(true);
+    setContactSettingsError('');
+
+    try {
+      const { data, error } = await supabase
+        .from('store_settings')
+        .select('id, store_name, phone, whatsapp, email, address, opening_hours, map_url')
+        .eq('id', true)
+        .maybeSingle();
+
+      if (error) throw error;
+      if (data) {
+        setDb((current) => ({
+          ...current,
+          contactSettings: mapStoreSettings(data, current.contactSettings)
+        }));
+      }
+    } catch (error) {
+      console.error('Could not load showroom settings from Supabase:', error.message);
+      setContactSettingsError('Contact settings could not be loaded. Check your connection and try again.');
+    } finally {
+      setContactSettingsLoading(false);
+    }
   }, []);
 
-  // Load showroom/contact settings and subscribe to changes.
+  // Load contact settings on startup and listen for live changes.
   useEffect(() => {
-    if (!supabase) return undefined;
+    if (!supabase) {
+      setContactSettingsLoading(false);
+      setContactSettingsError(
+        isProductionBuild ? 'Contact details are temporarily unavailable.' : ''
+      );
+      return undefined;
+    }
 
     let cancelled = false;
-
-    const applyStoreSettings = (row) => {
-      if (!row) return;
-
-      setDb((current) => ({
-        ...current,
-        contactSettings: mapStoreSettings(row, current.contactSettings)
-      }));
-    };
-
-    supabase
-      .from('store_settings')
-      .select(
-        'id, store_name, phone, whatsapp, email, address, opening_hours, map_url'
-      )
-      .eq('id', true)
-      .maybeSingle()
-      .then(({ data, error }) => {
-        if (error) throw error;
-        if (!cancelled) applyStoreSettings(data);
-      })
-      .catch((error) => {
-        console.error(
-          'Could not load showroom settings from Supabase:',
-          error.message
-        );
-      });
+    void reloadContactSettings();
 
     const channel = supabase
       .channel('store-settings-live')
@@ -327,9 +415,14 @@ export function DataProvider({ children }) {
         'postgres_changes',
         { event: '*', schema: 'public', table: 'store_settings' },
         (payload) => {
-          if (!cancelled && payload.new?.id === true) {
-            applyStoreSettings(payload.new);
-          }
+          if (cancelled || payload.new?.id !== true) return;
+
+          setDb((current) => ({
+            ...current,
+            contactSettings: mapStoreSettings(payload.new, current.contactSettings)
+          }));
+          setContactSettingsError('');
+          setContactSettingsLoading(false);
         }
       )
       .subscribe((status) => {
@@ -342,39 +435,55 @@ export function DataProvider({ children }) {
       cancelled = true;
       supabase.removeChannel(channel);
     };
-  }, []);
+  }, [reloadContactSettings]);
+  // Load website content from Supabase and expose loading, error, and retry state.
+  const reloadWebsiteContent = useCallback(async () => {
+    if (!supabase) {
+      setWebsiteContentLoading(false);
+      setWebsiteContentError(
+        isProductionBuild ? 'Website content is temporarily unavailable.' : ''
+      );
+      return;
+    }
 
-  // Load website content and subscribe to changes.
-  useEffect(() => {
-    if (!supabase) return undefined;
+    setWebsiteContentLoading(true);
+    setWebsiteContentError('');
 
-    let cancelled = false;
+    try {
+      const { data, error } = await supabase
+        .from('website_content')
+        .select('id, content, updated_at')
+        .eq('id', true)
+        .maybeSingle();
 
-    const applyWebsiteContent = (row) => {
-      if (!row?.content) return;
+      if (error) throw error;
 
+      const content = data?.content || {};
       setDb((current) => ({
         ...current,
-        websiteContent: row.content,
-        chatbotSettings: row.content.chatbotSettings || current.chatbotSettings
+        websiteContent: content,
+        chatbotSettings: content.chatbotSettings || current.chatbotSettings
       }));
-    };
+    } catch (error) {
+      console.error('Could not load website content from Supabase:', error.message);
+      setWebsiteContentError('Website content could not be loaded. Check your connection and try again.');
+    } finally {
+      setWebsiteContentLoading(false);
+    }
+  }, []);
 
-    supabase
-      .from('website_content')
-      .select('id, content, updated_at')
-      .eq('id', true)
-      .maybeSingle()
-      .then(({ data, error }) => {
-        if (error) throw error;
-        if (!cancelled) applyWebsiteContent(data);
-      })
-      .catch((error) => {
-        console.error(
-          'Could not load website content from Supabase:',
-          error.message
-        );
-      });
+  // Load website content on startup and listen for live changes.
+  useEffect(() => {
+    if (!supabase) {
+      setWebsiteContentLoading(false);
+      setWebsiteContentError(
+        isProductionBuild ? 'Website content is temporarily unavailable.' : ''
+      );
+      return undefined;
+    }
+
+    let cancelled = false;
+    void reloadWebsiteContent();
 
     const channel = supabase
       .channel('website-content-live')
@@ -382,9 +491,15 @@ export function DataProvider({ children }) {
         'postgres_changes',
         { event: '*', schema: 'public', table: 'website_content' },
         (payload) => {
-          if (!cancelled && payload.new?.id === true) {
-            applyWebsiteContent(payload.new);
-          }
+          if (cancelled || payload.new?.id !== true || !payload.new?.content) return;
+
+          setDb((current) => ({
+            ...current,
+            websiteContent: payload.new.content,
+            chatbotSettings: payload.new.content.chatbotSettings || current.chatbotSettings
+          }));
+          setWebsiteContentError('');
+          setWebsiteContentLoading(false);
         }
       )
       .subscribe();
@@ -393,10 +508,12 @@ export function DataProvider({ children }) {
       cancelled = true;
       supabase.removeChannel(channel);
     };
-  }, []);
-
-  // Persist site data locally, but never persist customer enquiry information.
+  }, [reloadWebsiteContent]);
+  // Persist sample data only in local development without Supabase.
+// Production content must always be loaded from the database.
   useEffect(() => {
+    if (!useLocalSampleData) return;
+
     saveDatabase({
       ...db,
       enquiries: []
@@ -938,7 +1055,9 @@ export function DataProvider({ children }) {
   const reloadBanners = useCallback(async () => {
     if (!supabase) {
       setBannersLoading(false);
-      setBannersError('');
+      setBannersError(
+        isProductionBuild ? 'Homepage content is temporarily unavailable.' : ''
+      );
       return;
     }
 
@@ -971,7 +1090,9 @@ export function DataProvider({ children }) {
   const reloadOffers = useCallback(async () => {
     if (!supabase) {
       setOffersLoading(false);
-      setOffersError('');
+      setOffersError(
+        isProductionBuild ? 'Current offers are temporarily unavailable.' : ''
+      );
       return;
     }
 
@@ -1167,7 +1288,9 @@ export function DataProvider({ children }) {
   const reloadServices = useCallback(async () => {
     if (!supabase) {
       setServicesLoading(false);
-      setServicesError('');
+      setServicesError(
+        isProductionBuild ? 'Store services are temporarily unavailable.' : ''
+      );
       return;
     }
 
@@ -1481,6 +1604,10 @@ export function DataProvider({ children }) {
   };
 
   const handleResetData = () => {
+    if (!useLocalSampleData) {
+      throw new Error('Sample data reset is available only in local development.');
+    }
+
     const fresh = resetDatabase();
     setDb({ ...fresh, enquiries: [] });
   };
@@ -1498,6 +1625,15 @@ export function DataProvider({ children }) {
     bannersLoading,
     bannersError,
     reloadBanners,
+    enquiriesLoading,
+    enquiriesError,
+    reloadEnquiries,
+    websiteContentLoading,
+    websiteContentError,
+    reloadWebsiteContent,
+    contactSettingsLoading,
+    contactSettingsError,
+    reloadContactSettings,
     publishedProducts,
     activeOffers,
     addProduct,
@@ -1537,7 +1673,3 @@ export function useData() {
 
   return context;
 }
-
-
-
-

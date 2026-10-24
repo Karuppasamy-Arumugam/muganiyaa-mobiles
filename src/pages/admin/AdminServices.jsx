@@ -180,7 +180,7 @@ export default function AdminServices() {
     deleteService
   } = useData();
 
-  const [services, setServices] = useState(db.services || []);
+  const [services, setServices] = useState(Array.isArray(db.services) ? db.services : []);
   const [newService, setNewService] = useState(createEmptyService());
   const [isAddFormOpen, setIsAddFormOpen] = useState(false);
   const [editingId, setEditingId] = useState(null);
@@ -189,7 +189,7 @@ export default function AdminServices() {
   const [message, setMessage] = useState('');
 
   useEffect(() => {
-    setServices(db.services || []);
+    setServices(Array.isArray(db.services) ? db.services : []);
   }, [db.services]);
 
   const updateLocalService = (index, field, value) => {
@@ -257,7 +257,7 @@ export default function AdminServices() {
   };
 
   const handleCancelEdit = () => {
-    setServices(db.services || []);
+    setServices(Array.isArray(db.services) ? db.services : []);
     setEditingId(null);
     setMessage('');
   };
@@ -307,6 +307,7 @@ export default function AdminServices() {
             setIsAddFormOpen((open) => !open);
             setMessage('');
           }}
+          disabled={servicesLoading || Boolean(servicesError) || isAdding}
         >
           {isAddFormOpen ? <X size={17} /> : <Plus size={17} />}
           {isAddFormOpen ? 'Close Form' : 'Add New Service'}
@@ -329,7 +330,8 @@ export default function AdminServices() {
       {servicesError && !servicesLoading && (
         <div className="alert alert-warning d-flex flex-column flex-sm-row align-items-sm-center justify-content-between gap-3 mb-4" role="alert">
           <span>Services could not be loaded. The list may not be up to date.</span>
-          <button type="button" className="btn btn-outline-dark btn-sm align-self-start align-self-sm-auto" onClick={() => void reloadServices()}>
+          <button type="button" className="btn btn-outline-dark btn-sm align-self-start align-self-sm-auto" onClick={() => void reloadServices()}
+            disabled={servicesLoading}>
             Try again
           </button>
         </div>
@@ -460,6 +462,7 @@ export default function AdminServices() {
             type="button"
             className="btn btn-brand-primary mx-auto d-inline-flex align-items-center gap-2"
             onClick={() => setIsAddFormOpen(true)}
+            disabled={servicesLoading || Boolean(servicesError)}
           >
             <Plus size={17} />
             Add New Service

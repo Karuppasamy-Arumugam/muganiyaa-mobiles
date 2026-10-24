@@ -3,29 +3,31 @@ import { Save, CheckCircle2, Bot, Plus, Trash2 } from 'lucide-react';
 import { useData } from '../../context/DataContext';
 
 export default function AdminChatbot() {
-  const { db, updateChatbotSettings } = useData();
-  const [settings, setSettings] = useState(db.chatbotSettings || {});
+  const { db, updateChatbotSettings, websiteContentLoading, websiteContentError, reloadWebsiteContent } = useData();
+  const [settings, setSettings] = useState(db?.chatbotSettings || {});
   const [savedSuccess, setSavedSuccess] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
 
   useEffect(() => {
-    setSettings(db.chatbotSettings || {});
-  }, [db.chatbotSettings]);
+    setSettings(db?.chatbotSettings || {});
+  }, [db?.chatbotSettings]);
+
+  const starterQuestions = Array.isArray(settings.starterQuestions) ? settings.starterQuestions : [];
 
   const handleStarterQuestionChange = (index, value) => {
-    const updated = [...(settings.starterQuestions || [])];
+    const updated = [...starterQuestions];
     updated[index] = value;
     setSettings({ ...settings, starterQuestions: updated });
   };
 
   const handleAddQuestion = () => {
-    const updated = [...(settings.starterQuestions || []), ''];
+    const updated = [...starterQuestions, ''];
     setSettings({ ...settings, starterQuestions: updated });
   };
 
   const handleRemoveQuestion = (index) => {
-    const updated = (settings.starterQuestions || []).filter((_, i) => i !== index);
+    const updated = starterQuestions.filter((_, i) => i !== index);
     setSettings({ ...settings, starterQuestions: updated });
   };
 
@@ -41,7 +43,7 @@ export default function AdminChatbot() {
       window.setTimeout(() => setSavedSuccess(false), 3000);
     } catch (error) {
       console.error('Could not save chatbot settings:', error);
-      setErrorMessage(error.message || 'Could not save chatbot settings. Please try again.');
+      setErrorMessage(error?.message || 'Could not save chatbot settings. Please try again.');
     } finally {
       setIsSaving(false);
     }
@@ -57,7 +59,7 @@ export default function AdminChatbot() {
           </p>
         </div>
 
-        <button type="button" className="btn btn-brand-primary btn-sm d-inline-flex align-items-center gap-1" onClick={handleSave} disabled={isSaving}>
+        <button type="submit" form="chatbot-settings-form" className="btn btn-brand-primary btn-sm d-inline-flex align-items-center gap-1" disabled={isSaving || websiteContentLoading || Boolean(websiteContentError)}>
           <Save size={16} />
           <span>{isSaving ? 'Saving…' : 'Save Assistant Settings'}</span>
         </button>
@@ -68,13 +70,26 @@ export default function AdminChatbot() {
       )}
 
       {savedSuccess && (
-        <div className="alert alert-success d-flex align-items-center gap-2 mb-4 shadow-sm">
+        <div className="alert alert-success d-flex align-items-center gap-2 mb-4 shadow-sm" role="status">
           <CheckCircle2 size={18} />
           <span>Assistant settings saved successfully.</span>
         </div>
       )}
 
-      <form onSubmit={handleSave}>
+      {websiteContentLoading ? (
+        <div className="card p-5 text-center border rounded-4 bg-white shadow-sm" role="status">
+          <div className="spinner-border text-danger mx-auto mb-3" aria-hidden="true" />
+          <p className="text-muted mb-0">Loading assistant settings…</p>
+        </div>
+      ) : websiteContentError ? (
+        <div className="alert alert-danger d-flex flex-column flex-sm-row align-items-sm-center justify-content-between gap-3" role="alert">
+          <span>{websiteContentError}</span>
+          <button type="button" className="btn btn-outline-danger btn-sm" onClick={() => void reloadWebsiteContent()}>
+            Try again
+          </button>
+        </div>
+      ) : (
+      <form id="chatbot-settings-form" onSubmit={handleSave}>
         <div className="card p-4 border rounded-4 bg-white shadow-sm mb-4" style={{ borderColor: 'var(--border-color)' }}>
           <div className="d-flex align-items-center justify-content-between mb-4 pb-3 border-bottom">
             <div className="d-flex align-items-center gap-3">
@@ -96,7 +111,7 @@ export default function AdminChatbot() {
                 onChange={(e) => setSettings({ ...settings, enabled: e.target.checked })}
               />
               <label className="form-check-label fw-bold small" htmlFor="chatbotEnabled">
-                {settings.enabled ? 'Enabled (Online)' : 'Disabled'}
+                {(settings.enabled ?? true) ? 'Enabled (Online)' : 'Disabled'}
               </label>
             </div>
           </div>
@@ -150,7 +165,7 @@ export default function AdminChatbot() {
               </div>
 
               <div className="d-flex flex-column gap-2">
-                {settings.starterQuestions?.map((q, qIdx) => (
+                {starterQuestions.length > 0 ? starterQuestions.map((q, qIdx) => (
                   <div key={qIdx} className="d-flex align-items-center gap-2">
                     <input
                       type="text"
@@ -166,13 +181,18 @@ export default function AdminChatbot() {
                       <Trash2 size={15} />
                     </button>
                   </div>
-                ))}
+                )) : (
+                  <p className="small text-muted mb-0">No suggested prompts yet. Add one to help visitors get started.</p>
+                )}
               </div>
             </div>
           </div>
         </div>
       </form>
+      )}
     </div>
   );
 }
+
+
 

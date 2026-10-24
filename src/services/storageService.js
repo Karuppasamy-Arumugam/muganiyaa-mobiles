@@ -1,4 +1,4 @@
-// Storage Service for Muganiyaa-Mobiles Demo
+// Storage Service for Muganiyaa-Mobiles
 // Central data abstraction layer managing browser persistence and reactive updates
 
 import {

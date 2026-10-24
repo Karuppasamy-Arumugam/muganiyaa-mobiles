@@ -1007,43 +1007,6 @@ export const INITIAL_PRODUCTS = [
     ]
   },
 
-  // 17. Draft Phone Example: Nothing Phone (3) Concept
-  {
-    id: 'prod-nothing-p3-draft',
-    slug: 'nothing-phone-3-concept',
-    name: 'Nothing Phone (3) [Upcoming Demo Preview]',
-    model: 'A150-PROTO',
-    brand: 'Nothing',
-    category: 'Mobile Phones',
-    categorySlug: 'mobiles',
-    tagline: 'Next-Gen AI Companion Smartphone Preview',
-    description: 'Upcoming flagship prototype with revolutionary interactive transparent matrix and Snapdragon 8s Gen 3. In draft status for shop testing.',
-    coverImage: 'https://images.unsplash.com/photo-1598327105666-5b89351aff97?w=600&auto=format&fit=crop&q=80',
-    images: ['https://images.unsplash.com/photo-1598327105666-5b89351aff97?w=600&auto=format&fit=crop&q=80'],
-    colors: [{ name: 'Smoky Grey', hex: '#333333' }],
-    ramOptions: ['12GB'],
-    storageOptions: ['256GB'],
-    variants: [{ color: 'Smoky Grey', ram: '12GB', storage: '256GB', originalPrice: 59999, sellingPrice: 54999, stockStatus: 'Out of Stock', sku: 'NP3-DRAFT' }],
-    originalPrice: 59999,
-    sellingPrice: 54999,
-    stockStatus: 'Out of Stock',
-    badges: ['Upcoming'],
-    offers: [],
-    isFeatured: false,
-    isLatestLaunch: false,
-    isBestSeller: false,
-    status: 'draft', // DRAFT product for testing admin publish/unpublish
-    specsType: 'phone',
-    specifications: {
-      frontCamera: '50MP',
-      rearCamera: '50MP + 50MP + 50MP',
-      cpu: 'Snapdragon 8s Gen 3',
-      display: '6.78" 1.5K LTPO AMOLED 144Hz',
-      batteryCapacity: '5200 mAh',
-      chargingSpeed: '65W Fast Charging'
-    },
-    highlights: ['Upcoming prototype preview in shop catalog (Unpublished draft)']
-  },
 
   // ==========================================
   // TABLETS (Samsung, Lenovo)
@@ -2297,19 +2260,7 @@ export const INITIAL_OFFERS = [
     status: 'active',
     terms: 'Bring any working 4G or 5G smartphone in clean condition. The ₹1,500 exchange bonus is added on top of the calculated device residual evaluation value when buying an eligible phone.'
   },
-  {
-    id: 'off-monsoon-expired',
-    title: 'Monsoon Kickoff Special 10% Off [Expired Sample Demo]',
-    badgeText: 'Expired Special',
-    type: 'Shop Discount',
-    provider: 'Muganiyaa Store',
-    discountPercentage: 10,
-    minPurchase: 5000,
-    startDate: '2026-05-01',
-    endDate: '2026-06-30',
-    status: 'expired',
-    terms: 'Demo illustrative expired promotion to test automatic hiding and admin archive handling.'
-  }
+
 ];
 
 export const INITIAL_BANNERS = [
@@ -2441,27 +2392,27 @@ Unlike impersonal online websites where warranties and repairs become endless cu
   ],
   footer: {
     tagline: 'Muganiyaa-Mobiles - Genuine electronics, authentic advice, and trusted local service.',
-    disclaimer: 'This website is a client demonstration prototype. Catalogue prices, specifications, and financing illustrations are shown for demo purposes only. Please contact or visit the store to confirm live stock availability.'
+    disclaimer: 'Product prices, specifications, financing, and availability may change. Please contact the store to confirm current details.'
   }
 };
 
 export const INITIAL_CONTACT_SETTINGS = {
   shopName: 'Muganiyaa-Mobiles',
   tagline: 'Your Trusted Destination for Mobiles, Electronics & Repairs',
-  phone: '+91 98765 43210',
-  whatsapp: '+919876543210',
-  email: 'contact@muganiyaamobiles.demo',
-  address: 'Main Bazaar Road, Near Town Clock Tower, Demo City, Tamil Nadu - 600001',
+  phone: '',
+  whatsapp: '',
+  email: '',
+  address: '',
   hours: 'Monday to Saturday: 9:30 AM – 9:30 PM | Sunday: 10:00 AM – 8:00 PM',
   mapQuery: 'Muganiyaa Mobiles',
-  mapPlaceholderNote: 'Interactive Google Maps location will be linked upon store verification.'
+  mapPlaceholderNote: ''
 };
 
 export const INITIAL_CHATBOT_SETTINGS = {
   enabled: true,
   assistantName: 'Muganiyaa Assistant',
   welcomeMessage: 'Namaste! Welcome to Muganiyaa-Mobiles. How can I help you today? You can ask about our latest phones, screen repairs, EMI offers, or shop timings.',
-  fallbackMessage: 'I could not find exact matching details for your query in our local demo catalog. Please feel free to give us a direct call or drop a message on WhatsApp for personalized help!',
+  fallbackMessage: 'I couldn’t find that detail in our store catalogue. Please contact the shop for help.',
   starterQuestions: [
     'Show phones under ₹20,000',
     'Do you repair displays?',

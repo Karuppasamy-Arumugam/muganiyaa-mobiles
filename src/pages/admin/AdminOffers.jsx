@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Plus } from 'lucide-react';
 import { useData } from '../../context/DataContext';
 
@@ -13,7 +13,27 @@ export default function AdminOffers() {
     deleteOffer
   } = useData();
 
-  const offers = db.offers || [];
+  const offers = Array.isArray(db.offers) ? db.offers : [];
+  const [searchQuery, setSearchQuery] = useState('');
+
+  const filteredOffers = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+    if (!query) return offers;
+
+    return offers.filter((offer) =>
+      [
+        offer.title,
+        offer.type,
+        offer.provider,
+        offer.badgeText,
+        offer.terms
+      ]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase()
+        .includes(query)
+    );
+  }, [offers, searchQuery]);
   const [editingOffer, setEditingOffer] = useState(null);
   const [showModal, setShowModal] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -114,7 +134,12 @@ export default function AdminOffers() {
           </p>
         </div>
 
-        <button type="button" className="btn btn-brand-primary btn-sm d-inline-flex align-items-center gap-1" onClick={handleOpenAdd}>
+        <button
+          type="button"
+          className="btn btn-brand-primary btn-sm d-inline-flex align-items-center gap-1"
+          onClick={handleOpenAdd}
+          disabled={offersLoading}
+        >
           <Plus size={16} />
           <span>Create New Offer</span>
         </button>
@@ -143,10 +168,34 @@ export default function AdminOffers() {
         </div>
       )}
 
-      {/* Offers Cards Grid */}
       {!offersLoading && !offersError && offers.length > 0 && (
+        <div className="mb-4">
+          <label className="visually-hidden" htmlFor="offerSearch">Search offers</label>
+          <input
+            id="offerSearch"
+            type="search"
+            className="form-control"
+            placeholder="Search offers by title, type, provider, or terms"
+            value={searchQuery}
+            onChange={(event) => setSearchQuery(event.target.value)}
+          />
+        </div>
+      )}
+
+      {!offersLoading && !offersError && offers.length > 0 && filteredOffers.length === 0 && (
+        <div className="card border rounded-4 p-4 text-center shadow-sm mb-4">
+          <h3 className="h5 fw-bold mb-2">No matching offers</h3>
+          <p className="text-muted mb-3">Try another search term or clear your search.</p>
+          <button type="button" className="btn btn-outline-secondary btn-sm align-self-center" onClick={() => setSearchQuery('')}>
+            Clear search
+          </button>
+        </div>
+      )}
+
+      {/* Offers Cards Grid */}
+      {!offersLoading && !offersError && filteredOffers.length > 0 && (
       <div className="row g-4">
-        {offers.map((offer) => {
+        {filteredOffers.map((offer) => {
           const isActive = offer.status === 'active';
           return (
             <div key={offer.id} className="col-12 col-md-6">

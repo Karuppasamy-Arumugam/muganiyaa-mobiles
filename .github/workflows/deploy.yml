@@ -1,4 +1,4 @@
-name: Deploy Muganiyaa-Mobiles Demo to GitHub Pages
+name: Deploy Muganiyaa-Mobiles to GitHub Pages
 
 on:
   push:

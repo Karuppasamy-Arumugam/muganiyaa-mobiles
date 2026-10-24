@@ -2,60 +2,168 @@ import React, { useState, useMemo } from 'react';
 import { Inbox, Phone, Mail, Wrench, Trash2 } from 'lucide-react';
 import { useData } from '../../context/DataContext';
 
+function formatEnquiryDate(value) {
+  if (!value) return 'Date unavailable';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return 'Date unavailable';
+
+  return date.toLocaleString('en-IN', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
+  });
+}
+
 export default function AdminEnquiries() {
-  const { db, updateEnquiry, deleteEnquiry } = useData();
-  const enquiries = db.enquiries || [];
+  const {
+    db,
+    enquiriesLoading = false,
+    enquiriesError = '',
+    reloadEnquiries = () => {},
+    updateEnquiry,
+    deleteEnquiry
+  } = useData();
+  const enquiries = Array.isArray(db.enquiries) ? db.enquiries : [];
 
   const [filterStatus, setFilterStatus] = useState('all');
   const [filterType, setFilterType] = useState('all');
+  const [searchQuery, setSearchQuery] = useState('');
   const [selectedEnquiry, setSelectedEnquiry] = useState(null);
   const [localNote, setLocalNote] = useState('');
+  const [actionError, setActionError] = useState('');
+  const [actionSuccess, setActionSuccess] = useState('');
+  const [savingId, setSavingId] = useState(null);
+  const [deletingId, setDeletingId] = useState(null);
+  const [isSavingNote, setIsSavingNote] = useState(false);
 
   const filteredEnquiries = useMemo(() => {
-    return enquiries.filter((e) => {
-      if (filterStatus !== 'all' && e.status !== filterStatus) return false;
-      if (filterType !== 'all' && e.enquiryType !== filterType) return false;
-      return true;
-    });
-  }, [enquiries, filterStatus, filterType]);
+    const query = searchQuery.trim().toLowerCase();
+
+    return enquiries
+      .filter((enquiry) => {
+        if (filterStatus !== 'all' && enquiry.status !== filterStatus) return false;
+        if (filterType !== 'all' && enquiry.enquiryType !== filterType) return false;
+
+        if (!query) return true;
+        return [
+          enquiry.customerName,
+          enquiry.phone,
+          enquiry.email,
+          enquiry.enquiryType,
+          enquiry.selectedProductOrService,
+          enquiry.message
+        ]
+          .filter(Boolean)
+          .join(' ')
+          .toLowerCase()
+          .includes(query);
+      })
+      .sort((a, b) => {
+        const aTime = Date.parse(a.createdAt || '') || 0;
+        const bTime = Date.parse(b.createdAt || '') || 0;
+        return bTime - aTime;
+      });
+  }, [enquiries, filterStatus, filterType, searchQuery]);
 
   const handleSelectEnquiry = (enq) => {
+    setActionError('');
+    setActionSuccess('');
     setSelectedEnquiry(enq);
     setLocalNote(enq.notes || '');
   };
 
-  const handleStatusChange = (enqId, nextStatus) => {
-    updateEnquiry(enqId, { status: nextStatus });
-    if (selectedEnquiry?.id === enqId) {
-      setSelectedEnquiry((prev) => ({ ...prev, status: nextStatus }));
+  const handleStatusChange = async (enqId, nextStatus) => {
+    setActionError('');
+    setActionSuccess('');
+    setSavingId(enqId);
+
+    try {
+      await updateEnquiry(enqId, { status: nextStatus });
+      setSelectedEnquiry((previous) =>
+        previous?.id === enqId ? { ...previous, status: nextStatus } : previous
+      );
+      setActionSuccess('Enquiry status updated.');
+    } catch (error) {
+      setActionError(error.message || 'Could not update the enquiry status.');
+    } finally {
+      setSavingId(null);
     }
   };
 
-  const handleRepairProgressChange = (enqId, repairState) => {
-    updateEnquiry(enqId, { repairProgress: repairState });
-    if (selectedEnquiry?.id === enqId) {
-      setSelectedEnquiry((prev) => ({ ...prev, repairProgress: repairState }));
+  const handleRepairProgressChange = async (enqId, repairState) => {
+    setActionError('');
+    setActionSuccess('');
+    setSavingId(enqId);
+
+    try {
+      await updateEnquiry(enqId, { repairProgress: repairState });
+      setSelectedEnquiry((previous) =>
+        previous?.id === enqId
+          ? { ...previous, repairProgress: repairState }
+          : previous
+      );
+      setActionSuccess('Repair stage updated.');
+    } catch (error) {
+      setActionError(error.message || 'Could not update the repair stage.');
+    } finally {
+      setSavingId(null);
     }
   };
 
-  const handleSaveNote = () => {
-    if (selectedEnquiry) {
-      updateEnquiry(selectedEnquiry.id, { notes: localNote });
-      setSelectedEnquiry((prev) => ({ ...prev, notes: localNote }));
+  const handleSaveNote = async () => {
+    if (!selectedEnquiry) return;
+
+    setActionError('');
+    setActionSuccess('');
+    setIsSavingNote(true);
+
+    try {
+      await updateEnquiry(selectedEnquiry.id, { notes: localNote });
+      setSelectedEnquiry((previous) =>
+        previous?.id === selectedEnquiry.id
+          ? { ...previous, notes: localNote }
+          : previous
+      );
+      setActionSuccess('Internal note saved.');
+    } catch (error) {
+      setActionError(error.message || 'Could not save the internal note.');
+    } finally {
+      setIsSavingNote(false);
     }
   };
 
-  const handleDelete = (id) => {
-    if (window.confirm('Delete this enquiry record?')) {
-      deleteEnquiry(id);
-      if (selectedEnquiry?.id === id) {
-        setSelectedEnquiry(null);
-      }
+  const handleDelete = async (id) => {
+    if (!window.confirm('Delete this enquiry record?')) return;
+
+    setActionError('');
+    setActionSuccess('');
+    setDeletingId(id);
+
+    try {
+      await deleteEnquiry(id);
+      if (selectedEnquiry?.id === id) setSelectedEnquiry(null);
+      setActionSuccess('Enquiry deleted.');
+    } catch (error) {
+      setActionError(error.message || 'Could not delete the enquiry.');
+    } finally {
+      setDeletingId(null);
     }
   };
 
   return (
     <div className="admin-enquiries pb-5">
+      {actionError && <div className="alert alert-danger" role="alert">{actionError}</div>}
+      {actionSuccess && <div className="alert alert-success" role="status">{actionSuccess}</div>}
+      {enquiriesError && (
+        <div className="alert alert-warning d-flex flex-column flex-sm-row align-items-sm-center justify-content-between gap-3" role="alert">
+          <span>Enquiries could not be loaded. Please try again.</span>
+          <button type="button" className="btn btn-outline-dark btn-sm" onClick={() => void reloadEnquiries()} disabled={enquiriesLoading}>
+            {enquiriesLoading ? 'Loading…' : 'Try again'}
+          </button>
+        </div>
+      )}
       <div className="d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-3 mb-4">
         <div>
           <h2 className="fw-bold text-dark mb-1 fs-3">Customer Inquiries & Service Tickets</h2>
@@ -67,6 +175,18 @@ export default function AdminEnquiries() {
 
       {/* Filter Bar */}
       <div className="card p-3 border rounded-3 bg-white mb-4 shadow-sm" style={{ borderColor: 'var(--border-color)' }}>
+        <div className="mb-3">
+          <label className="visually-hidden" htmlFor="enquirySearch">Search enquiries</label>
+          <input
+            id="enquirySearch"
+            type="search"
+            className="form-control form-control-sm"
+            placeholder="Search by customer, phone, email, service, or message"
+            value={searchQuery}
+            onChange={(event) => setSearchQuery(event.target.value)}
+            disabled={enquiriesLoading || Boolean(enquiriesError)}
+          />
+        </div>
         <div className="d-flex flex-wrap align-items-center gap-3">
           <div className="d-flex align-items-center gap-2">
             <label className="small text-muted fw-bold">Status:</label>
@@ -75,6 +195,7 @@ export default function AdminEnquiries() {
               style={{ width: '150px' }}
               value={filterStatus}
               onChange={(e) => setFilterStatus(e.target.value)}
+              disabled={enquiriesLoading || Boolean(enquiriesError)}
             >
               <option value="all">All ({enquiries.length})</option>
               <option value="New">New Unhandled</option>
@@ -90,6 +211,7 @@ export default function AdminEnquiries() {
               style={{ width: '180px' }}
               value={filterType}
               onChange={(e) => setFilterType(e.target.value)}
+              disabled={enquiriesLoading || Boolean(enquiriesError)}
             >
               <option value="all">All Types</option>
               <option value="Smartphone Repair">Smartphone Repair</option>
@@ -114,8 +236,19 @@ export default function AdminEnquiries() {
               <span className="fw-bold text-dark small">Inbox Messages</span>
             </div>
 
-            {filteredEnquiries.length === 0 ? (
-              <div className="p-4 text-center text-muted small">No enquiries found matching filter.</div>
+            {enquiriesLoading ? (
+              <div className="p-5 text-center text-muted" role="status" aria-live="polite">
+                <span className="spinner-border spinner-border-sm text-danger me-2" aria-hidden="true" />
+                Loading enquiries…
+              </div>
+            ) : enquiriesError ? (
+              <div className="p-4 text-center text-muted small">Use “Try again” above to reload the inbox.</div>
+            ) : filteredEnquiries.length === 0 ? (
+              <div className="p-4 text-center text-muted small">
+                {enquiries.length === 0
+                  ? 'There are no enquiries yet.'
+                  : 'No enquiries match these filters or search terms.'}
+              </div>
             ) : (
               <div className="overflow-y-auto" style={{ maxHeight: '600px' }}>
                 {filteredEnquiries.map((enq) => {
@@ -148,12 +281,7 @@ export default function AdminEnquiries() {
                       <div className="text-muted small d-flex justify-content-between mb-1">
                         <span>{enq.enquiryType}</span>
                         <span>
-                          {new Date(enq.createdAt).toLocaleDateString('en-IN', {
-                            month: 'short',
-                            day: 'numeric',
-                            hour: '2-digit',
-                            minute: '2-digit'
-                          })}
+                          {formatEnquiryDate(enq.createdAt)}
                         </span>
                       </div>
 
@@ -182,7 +310,8 @@ export default function AdminEnquiries() {
                   <select
                     className="form-select form-select-sm fw-bold"
                     value={selectedEnquiry.status}
-                    onChange={(e) => handleStatusChange(selectedEnquiry.id, e.target.value)}
+                    onChange={(e) => void handleStatusChange(selectedEnquiry.id, e.target.value)}
+                    disabled={savingId === selectedEnquiry.id || deletingId === selectedEnquiry.id}
                     style={{
                       color:
                         selectedEnquiry.status === 'New'
@@ -200,7 +329,8 @@ export default function AdminEnquiries() {
                   <button
                     type="button"
                     className="btn btn-outline-danger btn-sm p-1 px-2"
-                    onClick={() => handleDelete(selectedEnquiry.id)}
+                    onClick={() => void handleDelete(selectedEnquiry.id)}
+                    disabled={deletingId === selectedEnquiry.id || savingId === selectedEnquiry.id}
                     title="Delete Ticket"
                   >
                     <Trash2 size={16} />
@@ -211,7 +341,7 @@ export default function AdminEnquiries() {
               {/* Customer Contact Badges */}
               <div className="d-flex flex-wrap gap-3 mb-4">
                 <a
-                  href={`tel:${selectedEnquiry.phone.replace(/[^0-9+]/g, '')}`}
+                  href={`tel:${String(selectedEnquiry.phone || '').replace(/[^0-9+]/g, '')}`}
                   className="btn btn-brand-soft btn-sm d-inline-flex align-items-center gap-2"
                 >
                   <Phone size={15} />
@@ -248,7 +378,8 @@ export default function AdminEnquiries() {
                     <select
                       className="form-select form-select-sm"
                       value={selectedEnquiry.repairProgress || 'Received'}
-                      onChange={(e) => handleRepairProgressChange(selectedEnquiry.id, e.target.value)}
+                      onChange={(e) => void handleRepairProgressChange(selectedEnquiry.id, e.target.value)}
+                      disabled={savingId === selectedEnquiry.id}
                     >
                       <option value="Received">1. Device Received & Inspected</option>
                       <option value="In Diagnosis">2. In Diagnosis / Bench Testing</option>
@@ -273,7 +404,8 @@ export default function AdminEnquiries() {
                 <button
                   type="button"
                   className="btn btn-brand-primary btn-sm px-3"
-                  onClick={handleSaveNote}
+                  onClick={() => void handleSaveNote()}
+                  disabled={isSavingNote}
                 >
                   Save Internal Note
                 </button>
@@ -293,3 +425,4 @@ export default function AdminEnquiries() {
     </div>
   );
 }
+

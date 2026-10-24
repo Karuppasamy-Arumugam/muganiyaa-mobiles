@@ -1,4 +1,4 @@
-// IndexedDB Helper for Muganiyaa-Mobiles Demo
+// IndexedDB Helper for Muganiyaa-Mobiles
 // Allows storing uploaded images and blob assets locally in the browser
 // without overflowing localStorage quotas.
 

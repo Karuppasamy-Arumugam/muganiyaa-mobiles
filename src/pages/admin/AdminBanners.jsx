@@ -23,11 +23,12 @@ export default function AdminBanners() {
     reloadBanners = () => {},
     updateBanners
   } = useData();
-  const banners = db.banners || [];
+  const banners = Array.isArray(db.banners) ? db.banners : [];
 
   const [editingBanner, setEditingBanner] = useState(null);
   const [showModal, setShowModal] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [isUpdatingList, setIsUpdatingList] = useState(false);
   const [uploadingImage, setUploadingImage] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
 
@@ -148,11 +149,14 @@ export default function AdminBanners() {
     if (!window.confirm('Delete this promotional hero banner?')) return;
 
     setErrorMessage('');
+    setIsUpdatingList(true);
     try {
       await updateBanners(banners.filter((banner) => banner.id !== id));
     } catch (error) {
       console.error('Could not delete banner:', error);
       setErrorMessage(error.message || 'Could not delete the banner.');
+    } finally {
+      setIsUpdatingList(false);
     }
   };
 
@@ -165,11 +169,14 @@ export default function AdminBanners() {
         : banner
     );
 
+    setIsUpdatingList(true);
     try {
       await updateBanners(updatedBanners);
     } catch (error) {
       console.error('Could not update banner status:', error);
       setErrorMessage(error.message || 'Could not update banner status.');
+    } finally {
+      setIsUpdatingList(false);
     }
   };
 
@@ -184,11 +191,14 @@ export default function AdminBanners() {
     ];
 
     setErrorMessage('');
+    setIsUpdatingList(true);
     try {
       await updateBanners(reordered);
     } catch (error) {
       console.error('Could not reorder banners:', error);
       setErrorMessage(error.message || 'Could not reorder banners.');
+    } finally {
+      setIsUpdatingList(false);
     }
   };
 
@@ -218,7 +228,7 @@ export default function AdminBanners() {
           type="button"
           className="btn btn-brand-primary btn-sm d-inline-flex align-items-center gap-1"
           onClick={handleOpenAdd}
-          disabled={bannersLoading || Boolean(bannersError)}
+          disabled={bannersLoading || Boolean(bannersError) || isUpdatingList}
         >
           <Plus size={16} />
           <span>Add Hero Banner</span>
@@ -283,6 +293,7 @@ export default function AdminBanners() {
                         : 'btn-secondary text-white'
                     }`}
                     onClick={() => toggleActive(banner)}
+                    disabled={isUpdatingList}
                   >
                     {banner.active ? 'Active' : 'Hidden'}
                   </button>
@@ -308,7 +319,7 @@ export default function AdminBanners() {
                   <button
                     type="button"
                     className="btn btn-outline-secondary btn-sm p-1"
-                    disabled={index === 0}
+                    disabled={index === 0 || isUpdatingList}
                     onClick={() => moveOrder(index, -1)}
                     title="Move Up"
                   >
@@ -317,7 +328,7 @@ export default function AdminBanners() {
                   <button
                     type="button"
                     className="btn btn-outline-secondary btn-sm p-1"
-                    disabled={index === banners.length - 1}
+                    disabled={index === banners.length - 1 || isUpdatingList}
                     onClick={() => moveOrder(index, 1)}
                     title="Move Down"
                   >
@@ -330,6 +341,7 @@ export default function AdminBanners() {
                     type="button"
                     className="btn btn-outline-primary btn-sm px-3"
                     onClick={() => handleOpenEdit(banner)}
+                    disabled={isUpdatingList}
                   >
                     Edit
                   </button>
@@ -337,6 +349,7 @@ export default function AdminBanners() {
                     type="button"
                     className="btn btn-outline-danger btn-sm px-3"
                     onClick={() => handleDelete(banner.id)}
+                    disabled={isUpdatingList}
                   >
                     Delete
                   </button>

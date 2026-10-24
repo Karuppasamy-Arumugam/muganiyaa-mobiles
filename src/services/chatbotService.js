@@ -1,6 +1,5 @@
-// Local Simulated Chatbot Service for Muganiyaa-Mobiles
-// Responds intelligently to customer queries using the live in-browser catalogue and settings
-// Designed to be swapped seamlessly with a Django + Groq API endpoint in production.
+// Local catalogue assistant fallback for Muganiyaa-Mobiles.
+// Uses the products, offers, and store settings passed in by the application.
 
 export function generateChatbotReply(userInput, { products = [], offers = [], contactSettings = {}, _services = [] }) {
   const query = (userInput || '').trim().toLowerCase();
@@ -75,8 +74,19 @@ You can walk into our shop for instant diagnostic evaluation, or submit a repair
 
   // 6. Contact / Address / Location / Phone / Hours
   if (query.includes('contact') || query.includes('address') || query.includes('location') || query.includes('phone') || query.includes('timing') || query.includes('hours') || query.includes('where')) {
+    const contactDetails = [
+      ['Address', contactSettings.address],
+      ['Phone', contactSettings.phone],
+      ['WhatsApp', contactSettings.whatsapp],
+      ['Opening Hours', contactSettings.hours]
+    ]
+      .filter(([, value]) => String(value || '').trim())
+      .map(([label, value]) => `• ${label}: ${String(value).trim()}`);
+
     return {
-      text: `You can reach Muganiyaa-Mobiles at:\n• Address: ${contactSettings.address || 'Main Bazaar Road, Demo City'}\n• Phone: ${contactSettings.phone || '+91 98765 43210'}\n• WhatsApp: ${contactSettings.whatsapp || '+919876543210'}\n• Opening Hours: ${contactSettings.hours || 'Mon-Sat: 9:30 AM - 9:30 PM'}`,
+      text: contactDetails.length
+        ? `You can reach Muganiyaa-Mobiles at:\n${contactDetails.join('\n')}`
+        : 'Please visit our Contact page for the current store contact details.',
       cta: { label: 'Visit Contact Page', link: '/contact' },
       actionType: 'contact'
     };
@@ -134,9 +144,8 @@ You can walk into our shop for instant diagnostic evaluation, or submit a repair
 
   // 9. Default Fallback
   return {
-    text: `I'm a local demo assistant for Muganiyaa-Mobiles. I can help you find smartphones, check screen repair details, look up EMI options, or share store timings. 
-
-Could you please specify what product or service you are interested in? You can also contact our shop directly at ${contactSettings.phone || '+91 98765 43210'}.`,
+    text: `I'm Muganiyaa-Mobiles' assistant. I can help you find products, learn about store services, and check current offers. Could you please tell me what you are looking for? For store contact details, visit our Contact page.`,
+    cta: { label: 'Contact Store', link: '/contact' },
     actionType: 'fallback'
   };
 }

@@ -30,7 +30,7 @@ import AdminEnquiries from './pages/admin/AdminEnquiries';
 import AdminContent from './pages/admin/AdminContent';
 import AdminContact from './pages/admin/AdminContact';
 import AdminChatbot from './pages/admin/AdminChatbot';
-import AdminDemoSettings from './pages/admin/AdminDemoSettings';
+import AdminMaintenance from './pages/admin/AdminMaintenance';
 
 import { useAuth } from './context/AuthContext';
 
@@ -107,7 +107,7 @@ export default function App() {
             <Route path="content" element={<AdminContent />} />
             <Route path="contact" element={<AdminContact />} />
             <Route path="chatbot" element={<AdminChatbot />} />
-            <Route path="demo" element={<AdminDemoSettings />} />
+            <Route path="maintenance" element={<AdminMaintenance />} />
           </Route>
 
           {/* Unknown URLs */}

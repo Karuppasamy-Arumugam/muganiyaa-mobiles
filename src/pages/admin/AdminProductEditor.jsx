@@ -118,10 +118,10 @@ export default function AdminProductEditor() {
   const { id } = useParams();
   const isEditMode = Boolean(id);
   const navigate = useNavigate();
-  const { db, addProduct, updateProduct } = useData();
+  const { db, addProduct, updateProduct, catalogLoading, catalogError, offersLoading, offersError, reloadOffers } = useData();
 
-  const categories = db.categories || [];
-  const activeOffers = (db.offers || []).filter(
+  const categories = Array.isArray(db?.categories) ? db.categories : [];
+  const activeOffers = (Array.isArray(db?.offers) ? db.offers : []).filter(
     (offer) => offer.status === 'active'
   );
 
@@ -169,7 +169,8 @@ export default function AdminProductEditor() {
     highlights: ['']
   });
 
-  const brands = db.brands || [];
+  const brands = Array.isArray(db?.brands) ? db.brands : [];
+  const existingProduct = (Array.isArray(db?.products) ? db.products : []).find((product) => product.id === id);
 
   // Show active database brands and retain the current brand while editing
   // older products whose brand is inactive or absent from the brands table.
@@ -526,6 +527,48 @@ export default function AdminProductEditor() {
     }
   };
 
+  if (catalogLoading) {
+    return (
+      <div className="admin-product-editor pb-5">
+        <div className="card p-5 text-center border rounded-4 bg-white shadow-sm" role="status">
+          <div className="spinner-border text-danger mx-auto mb-3" aria-hidden="true" />
+          <p className="text-muted mb-0">Loading product catalogue…</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (catalogError) {
+    return (
+      <div className="admin-product-editor pb-5">
+        <div className="alert alert-danger d-flex flex-column flex-sm-row align-items-sm-center justify-content-between gap-3" role="alert">
+          <span>{catalogError}</span>
+          <button type="button" className="btn btn-outline-danger btn-sm" onClick={() => window.location.reload()}>
+            Try again
+          </button>
+        </div>
+        <Link to="/store-owner-7f3c9a2e6b41d805/products" className="btn btn-outline-secondary btn-sm d-inline-flex align-items-center gap-2">
+          <ArrowLeft size={16} /> Back to products
+        </Link>
+      </div>
+    );
+  }
+
+  if (isEditMode && !existingProduct) {
+    return (
+      <div className="admin-product-editor pb-5">
+        <div className="card p-5 text-center border rounded-4 bg-white shadow-sm">
+          <h3 className="fw-bold text-dark fs-5 mb-2">Product not found</h3>
+          <p className="text-muted mb-4">This product may have been removed or the address may be incorrect.</p>
+          <div>
+            <Link to="/store-owner-7f3c9a2e6b41d805/products" className="btn btn-brand-primary btn-sm d-inline-flex align-items-center gap-2">
+              <ArrowLeft size={16} /> Back to products
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
   return (
     <div className="admin-product-editor pb-5">
       <div
@@ -582,7 +625,7 @@ export default function AdminProductEditor() {
       </div>
 
       {saveSuccess && (
-        <div className="alert alert-success d-flex align-items-center gap-2 shadow-sm mb-4">
+        <div className="alert alert-success d-flex align-items-center gap-2 shadow-sm mb-4" role="status">
           <CheckCircle2 size={20} />
           <span>
             Product successfully saved and synchronized to public website!
@@ -1353,7 +1396,14 @@ export default function AdminProductEditor() {
                 page.
               </p>
               <div className="d-flex flex-column gap-2">
-                {activeOffers.map((offer) => {
+                {offersLoading ? (
+                  <p className="small text-muted mb-0" role="status">Loading current offers…</p>
+                ) : offersError ? (
+                  <div className="alert alert-danger d-flex flex-column flex-sm-row align-items-sm-center justify-content-between gap-2 mb-0" role="alert">
+                    <span>{offersError}</span>
+                    <button type="button" className="btn btn-outline-danger btn-sm" onClick={() => void reloadOffers()}>Try again</button>
+                  </div>
+                ) : activeOffers.map((offer) => {
                   const isChecked = formData.offers?.includes(offer.id);
 
                   return (
@@ -1392,7 +1442,7 @@ export default function AdminProductEditor() {
                     </label>
                   );
                 })}
-                {activeOffers.length === 0 && (
+                {!offersLoading && !offersError && activeOffers.length === 0 && (
                   <div className="text-muted small">
                     No active offers are available.
                   </div>
@@ -1508,3 +1558,6 @@ export default function AdminProductEditor() {
     </div>
   );
 }
+
+
+

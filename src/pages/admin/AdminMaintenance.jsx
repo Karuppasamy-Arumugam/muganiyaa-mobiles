@@ -15,8 +15,10 @@ import {
 import { useData } from '../../context/DataContext';
 import { isSupabaseConfigured, supabase } from '../../services/supabaseClient';
 
-export default function AdminDemoSettings() {
-  const { db, resetData } = useData();
+const canResetLocalData = import.meta.env.DEV && !isSupabaseConfigured;
+
+export default function AdminMaintenance() {
+  const { db, resetData, catalogLoading, catalogError, offersLoading, offersError, enquiriesLoading, enquiriesError, servicesLoading, servicesError } = useData();
   const [connection, setConnection] = useState({
     status: 'checking',
     message: 'Checking Supabase connection…',
@@ -28,7 +30,7 @@ export default function AdminDemoSettings() {
     if (!isSupabaseConfigured || !supabase) {
       setConnection({
         status: 'local',
-        message: 'Supabase is not configured. The app is using local demo data.',
+        message: 'Supabase is not configured. The app is using local data.',
         checkedAt: new Date()
       });
       return;
@@ -70,8 +72,10 @@ export default function AdminDemoSettings() {
   }, [checkSupabaseConnection]);
 
   const handleLocalReset = () => {
+    if (!canResetLocalData) return;
+
     const confirmed = window.confirm(
-      'Reset local browser demo data to the sample data? This does not change Supabase.'
+      'Restore the starter data saved in this browser? This only affects this browser.'
     );
 
     if (!confirmed) return;
@@ -84,21 +88,29 @@ export default function AdminDemoSettings() {
     {
       label: 'Products loaded',
       value: (db.products || []).length,
+      loading: catalogLoading,
+      error: catalogError,
       icon: Package
     },
     {
       label: 'Offers loaded',
       value: (db.offers || []).length,
+      loading: offersLoading,
+      error: offersError,
       icon: Tag
     },
     {
       label: 'Enquiries loaded',
       value: (db.enquiries || []).length,
+      loading: enquiriesLoading,
+      error: enquiriesError,
       icon: MessageSquare
     },
     {
       label: 'Services loaded',
       value: (db.services || []).length,
+      loading: servicesLoading,
+      error: servicesError,
       icon: Wrench
     }
   ];
@@ -160,14 +172,23 @@ export default function AdminDemoSettings() {
             )}
 
             <div className="row g-3 mt-1">
-              {counts.map(({ label, value, icon: Icon }) => (
+              {counts.map(({ label, value, icon: Icon, loading, error }) => (
                 <div className="col-6" key={label}>
                   <div className="p-3 bg-light rounded border h-100">
                     <div className="d-flex align-items-center justify-content-between mb-2">
                       <small className="text-muted">{label}</small>
                       <Icon size={17} className="text-danger" />
                     </div>
-                    <div className="fs-4 fw-bold text-dark">{value}</div>
+                    <div className="fs-4 fw-bold text-dark" aria-live="polite">
+                      {loading ? (
+                        <span className="fs-6 text-muted">Loading…</span>
+                      ) : error ? (
+                        <span className="fs-6 text-danger">Unavailable</span>
+                      ) : value === 0 ? (
+                        <span className="fs-6 text-muted">No records loaded</span>
+                      ) : value}
+                    </div>
+                    {error && <small className="text-danger d-block mt-1">Could not load this data.</small>}
                   </div>
                 </div>
               ))}
@@ -194,16 +215,15 @@ export default function AdminDemoSettings() {
 
             <p className="text-muted small mb-0">
               API keys should remain in Supabase Function secrets and are not shown in this
-              dashboard. To confirm the assistant works, send a test message through the public
-              website chat.
+              dashboard. To confirm the assistant works, send a message through the website chat.
             </p>
           </div>
 
-          {!isSupabaseConfigured && (
+          {canResetLocalData && (
             <div className="card p-4 border rounded-4 bg-white shadow-sm border-warning">
-              <h5 className="fw-bold text-dark mb-2">Local demo data</h5>
+              <h5 className="fw-bold text-dark mb-2">Local data</h5>
               <p className="text-muted small">
-                Restore the sample data saved in this browser. This action does not affect
+                Restore the starter data saved in this browser. This action does not affect
                 Supabase.
               </p>
               <button
@@ -212,7 +232,7 @@ export default function AdminDemoSettings() {
                 onClick={handleLocalReset}
               >
                 <RefreshCw size={16} />
-                Reset local sample data
+                Restore local data
               </button>
             </div>
           )}
@@ -221,3 +241,4 @@ export default function AdminDemoSettings() {
     </div>
   );
 }
+

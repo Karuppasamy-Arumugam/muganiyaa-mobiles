@@ -253,7 +253,7 @@ export default function AdminDashboard() {
               </Link>
 
               <Link
-                to="/store-owner-7f3c9a2e6b41d805/demo"
+                to="/store-owner-7f3c9a2e6b41d805/maintenance"
                 className="btn btn-outline-secondary btn-sm"
               >
                 System Status

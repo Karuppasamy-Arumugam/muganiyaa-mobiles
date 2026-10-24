@@ -59,7 +59,7 @@ export default function AdminLayout() {
     { to: '/store-owner-7f3c9a2e6b41d805/content', label: 'Website Content', icon: FileText },
     { to: '/store-owner-7f3c9a2e6b41d805/contact', label: 'Contact & Hours', icon: PhoneCall },
     { to: '/store-owner-7f3c9a2e6b41d805/chatbot', label: 'Chatbot Settings', icon: Bot },
-    { to: '/store-owner-7f3c9a2e6b41d805/demo', label: 'Store Data & Maintenance', icon: RotateCcw }
+    { to: '/store-owner-7f3c9a2e6b41d805/maintenance', label: 'Store Data & Maintenance', icon: RotateCcw }
   ];
 
   return (

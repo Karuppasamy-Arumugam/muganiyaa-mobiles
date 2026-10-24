@@ -1,18 +1,19 @@
 import React, { useEffect, useState } from 'react';
-import { Save, CheckCircle2 } from 'lucide-react';
+import { Save, CheckCircle2, Info } from 'lucide-react';
 import { useData } from '../../context/DataContext';
 
 export default function AdminContent() {
-  const { db, updateWebsiteContent } = useData();
+  const { db, updateWebsiteContent, websiteContentLoading, websiteContentError, reloadWebsiteContent } = useData();
+  const websiteContent = db?.websiteContent || {};
 
-  const [content, setContent] = useState(db.websiteContent || {});
+  const [content, setContent] = useState(websiteContent);
   const [savedSuccess, setSavedSuccess] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState('');
 
   useEffect(() => {
-    setContent(db.websiteContent || {});
-  }, [db.websiteContent]);
+    setContent(websiteContent);
+  }, [websiteContent]);
 
   const handleAboutChange = (field, value) => {
     setContent((previous) => ({
@@ -64,7 +65,7 @@ export default function AdminContent() {
       window.setTimeout(() => setSavedSuccess(false), 3000);
     } catch (error) {
       console.error('Could not save website content:', error);
-      setSaveError(error.message || 'Could not save website content.');
+      setSaveError(error?.message || 'Could not save website content. Please try again.');
     } finally {
       setIsSaving(false);
     }
@@ -87,7 +88,7 @@ export default function AdminContent() {
           type="submit"
           form="website-content-form"
           className="btn btn-brand-primary btn-sm d-inline-flex align-items-center gap-2"
-          disabled={isSaving}
+          disabled={isSaving || websiteContentLoading || Boolean(websiteContentError)}
         >
           <Save size={16} />
           <span>{isSaving ? 'Saving...' : 'Save Website Content'}</span>
@@ -100,7 +101,7 @@ export default function AdminContent() {
           role="status"
         >
           <CheckCircle2 size={18} />
-          <span>Website content successfully saved.</span>
+          <span>Website content saved successfully.</span>
         </div>
       )}
 
@@ -110,6 +111,19 @@ export default function AdminContent() {
         </div>
       )}
 
+      {websiteContentLoading ? (
+        <div className="card p-5 text-center border rounded-4 bg-white shadow-sm" role="status">
+          <div className="spinner-border text-danger mx-auto mb-3" aria-hidden="true" />
+          <p className="text-muted mb-0">Loading website content…</p>
+        </div>
+      ) : websiteContentError ? (
+        <div className="alert alert-danger d-flex flex-column flex-sm-row align-items-sm-center justify-content-between gap-3" role="alert">
+          <span>{websiteContentError}</span>
+          <button type="button" className="btn btn-outline-danger btn-sm" onClick={() => void reloadWebsiteContent()}>
+            Try again
+          </button>
+        </div>
+      ) : (
       <form id="website-content-form" onSubmit={handleSave}>
         {/* About Us */}
         <div
@@ -168,111 +182,62 @@ export default function AdminContent() {
           className="card p-4 border rounded-4 bg-white shadow-sm mb-4"
           style={{ borderColor: 'var(--border-color)' }}
         >
-          <h5 className="fw-bold text-dark mb-3">
-            Authorized Retail Partnerships
-          </h5>
-
-          <div className="row g-3">
-            {(content.partners || []).map((partner, index) => (
-              <div key={partner.id || index} className="col-12 col-md-4">
-                <div className="card p-3 border bg-light h-100">
-                  <h6 className="fw-bold text-dark mb-2">
-                    Partner #{index + 1}: {partner.name || ''}
-                  </h6>
-
-                  <div className="mb-2">
-                    <label className="form-label small fw-bold text-dark">
-                      Badge Statement
-                    </label>
-                    <input
-                      type="text"
-                      className="form-control form-control-sm"
-                      value={partner.badge || ''}
-                      onChange={(event) =>
-                        handlePartnerChange(
-                          index,
-                          'badge',
-                          event.target.value
-                        )
-                      }
-                    />
-                  </div>
-
-                  <div>
-                    <label className="form-label small fw-bold text-dark">
-                      Description
-                    </label>
-                    <textarea
-                      rows={2}
-                      className="form-control form-control-sm"
-                      value={partner.description || ''}
-                      onChange={(event) =>
-                        handlePartnerChange(
-                          index,
-                          'description',
-                          event.target.value
-                        )
-                      }
-                    />
+          <h5 className="fw-bold text-dark mb-3">Authorized Retail Partnerships</h5>
+          {Array.isArray(content.partners) && content.partners.length > 0 ? (
+            <div className="row g-3">
+              {content.partners.map((partner, index) => (
+                <div key={partner.id || index} className="col-12 col-md-4">
+                  <div className="card p-3 border bg-light h-100">
+                    <h6 className="fw-bold text-dark mb-2">Partner #{index + 1}: {partner.name || 'Unnamed partner'}</h6>
+                    <div className="mb-2">
+                      <label htmlFor={`partner-badge-${index}`} className="form-label small fw-bold text-dark">Badge Statement</label>
+                      <input id={`partner-badge-${index}`} type="text" className="form-control form-control-sm" value={partner.badge || ''} onChange={(event) => handlePartnerChange(index, 'badge', event.target.value)} />
+                    </div>
+                    <div>
+                      <label htmlFor={`partner-description-${index}`} className="form-label small fw-bold text-dark">Description</label>
+                      <textarea id={`partner-description-${index}`} rows={2} className="form-control form-control-sm" value={partner.description || ''} onChange={(event) => handlePartnerChange(index, 'description', event.target.value)} />
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          ) : (
+            <div className="alert alert-light border d-flex align-items-start gap-2 mb-0" role="status">
+              <Info size={18} className="text-muted mt-1 flex-shrink-0" />
+              <span className="small text-muted">No partner content is configured yet. Add partner entries to the website content, then edit them here.</span>
+            </div>
+          )}
         </div>
-
         {/* Why Choose Us */}
         <div
           className="card p-4 border rounded-4 bg-white shadow-sm mb-4"
           style={{ borderColor: 'var(--border-color)' }}
         >
           <h5 className="fw-bold text-dark mb-3">Why Choose Us Pillars</h5>
-
-          <div className="row g-3">
-            {(content.whyChooseUs || []).map((item, index) => (
-              <div key={item.id || index} className="col-12 col-md-6">
-                <div className="card p-3 border bg-light h-100">
-                  <div className="mb-2">
-                    <label className="form-label small fw-bold text-dark">
-                      Pillar #{index + 1} Title
-                    </label>
-                    <input
-                      type="text"
-                      className="form-control form-control-sm"
-                      value={item.title || ''}
-                      onChange={(event) =>
-                        handleWhyChooseChange(
-                          index,
-                          'title',
-                          event.target.value
-                        )
-                      }
-                    />
-                  </div>
-
-                  <div>
-                    <label className="form-label small fw-bold text-dark">
-                      Statement
-                    </label>
-                    <textarea
-                      rows={2}
-                      className="form-control form-control-sm"
-                      value={item.description || ''}
-                      onChange={(event) =>
-                        handleWhyChooseChange(
-                          index,
-                          'description',
-                          event.target.value
-                        )
-                      }
-                    />
+          {Array.isArray(content.whyChooseUs) && content.whyChooseUs.length > 0 ? (
+            <div className="row g-3">
+              {content.whyChooseUs.map((item, index) => (
+                <div key={item.id || index} className="col-12 col-md-6">
+                  <div className="card p-3 border bg-light h-100">
+                    <div className="mb-2">
+                      <label htmlFor={`why-title-${index}`} className="form-label small fw-bold text-dark">Pillar #{index + 1} Title</label>
+                      <input id={`why-title-${index}`} type="text" className="form-control form-control-sm" value={item.title || ''} onChange={(event) => handleWhyChooseChange(index, 'title', event.target.value)} />
+                    </div>
+                    <div>
+                      <label htmlFor={`why-description-${index}`} className="form-label small fw-bold text-dark">Statement</label>
+                      <textarea id={`why-description-${index}`} rows={2} className="form-control form-control-sm" value={item.description || ''} onChange={(event) => handleWhyChooseChange(index, 'description', event.target.value)} />
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          ) : (
+            <div className="alert alert-light border d-flex align-items-start gap-2 mb-0" role="status">
+              <Info size={18} className="text-muted mt-1 flex-shrink-0" />
+              <span className="small text-muted">No Why Choose Us cards are configured yet. Add entries to the website content, then edit them here.</span>
+            </div>
+          )}
         </div>
-
         {/* Footer */}
         <div
           className="card p-4 border rounded-4 bg-white shadow-sm"
@@ -299,7 +264,7 @@ export default function AdminContent() {
 
             <div className="col-12">
               <label className="form-label small fw-bold text-dark">
-                Footer Demo Disclaimer
+                Footer Disclaimer
               </label>
               <textarea
                 rows={2}
@@ -313,6 +278,10 @@ export default function AdminContent() {
           </div>
         </div>
       </form>
+      )}
     </div>
   );
 }
+
+
+

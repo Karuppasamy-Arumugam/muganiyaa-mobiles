@@ -39,7 +39,13 @@ export default function HomePage() {
     catalogError = '',
     servicesLoading = false,
     servicesError = '',
-    reloadServices = () => {}
+    reloadServices = () => {},
+    websiteContentLoading = false,
+    websiteContentError = '',
+    reloadWebsiteContent = () => {},
+    contactSettingsLoading = false,
+    contactSettingsError = '',
+    reloadContactSettings = () => {}
   } = useData();
 
   const db = dbFromStore && typeof dbFromStore === 'object' ? dbFromStore : {};
@@ -138,7 +144,8 @@ export default function HomePage() {
         </div>
       )}
 
-      {/* Hero Carousel */}      {banners.length > 0 && (
+      {/* Hero Carousel */}
+      {banners.length > 0 && (
         <section
           className="hero-carousel-section position-relative bg-dark overflow-hidden"
           aria-label="Featured Promotions"
@@ -814,6 +821,20 @@ export default function HomePage() {
               <span className="text-uppercase fw-bold text-danger small">
                 About Our Shop
               </span>
+              {websiteContentLoading && (
+                <div className="alert alert-light border d-flex align-items-center gap-3" role="status" aria-live="polite">
+                  <span className="spinner-border spinner-border-sm text-danger" aria-hidden="true" />
+                  <span>Loading store information…</span>
+                </div>
+              )}
+              {websiteContentError && !websiteContentLoading && (
+                <div className="alert alert-warning d-flex flex-column align-items-start gap-2" role="alert">
+                  <span>We couldn’t load the store information.</span>
+                  <button type="button" className="btn btn-outline-dark btn-sm" onClick={() => void reloadWebsiteContent()}>
+                    Try again
+                  </button>
+                </div>
+              )}
               <h2 className="fw-bold mb-3">
                 {content.aboutUs?.title || 'Welcome to Muganiyaa-Mobiles'}
               </h2>
@@ -858,6 +879,20 @@ export default function HomePage() {
                   or enquire about finance documents.
                 </p>
 
+                {contactSettingsLoading && (
+                  <div className="d-flex align-items-center gap-2 text-muted small" role="status" aria-live="polite">
+                    <span className="spinner-border spinner-border-sm text-danger" aria-hidden="true" />
+                    <span>Loading store contact details…</span>
+                  </div>
+                )}
+                {contactSettingsError && !contactSettingsLoading && (
+                  <div className="alert alert-warning d-flex flex-column flex-sm-row align-items-sm-center justify-content-between gap-2" role="alert">
+                    <span>We couldn’t load the store contact details.</span>
+                    <button type="button" className="btn btn-outline-dark btn-sm align-self-start align-self-sm-auto" onClick={() => void reloadContactSettings()}>
+                      Try again
+                    </button>
+                  </div>
+                )}
                 <div className="d-flex flex-column gap-3 text-muted small">
                   {storeHours && (
                     <div className="d-flex align-items-center gap-2">
@@ -877,7 +912,7 @@ export default function HomePage() {
 
               <div className="col-12 col-lg-5 text-lg-end">
                 <div className="d-flex flex-column flex-sm-row justify-content-lg-end gap-3">
-                  {phoneHref && (
+                  {!contactSettingsLoading && !contactSettingsError && phoneHref && (
                     <a
                       href={`tel:${phoneHref}`}
                       className="btn btn-brand-primary py-3 px-4 d-inline-flex align-items-center justify-content-center gap-2 fw-bold"
@@ -903,6 +938,10 @@ export default function HomePage() {
     </div>
   );
 }
+
+
+
+
 
 
 

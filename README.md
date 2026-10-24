@@ -2,7 +2,7 @@
 
 A responsive product catalogue and customer enquiry website for Muganiyaa Mobiles, an electronics and telecom retailer in Tenkasi. Customers can browse products and services, compare product variants, and contact the store. The owner can manage catalogue content and customer enquiries through a protected admin area.
 
-**Live website:** https://karuppasamy-arumugam.github.io/muganiya-mobiles-demo/
+**Live website:** https://karuppasamy-arumugam.github.io/muganiyaa-mobiles/
 
 ## Features
 
