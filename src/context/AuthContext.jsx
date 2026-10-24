@@ -9,6 +9,7 @@ import { supabase } from '../services/supabaseClient';
 
 const AuthContext = createContext(null);
 const ADMIN_ROLES = ['admin', 'owner', 'manager'];
+const MFA_FACTOR_NAME = 'Muganiyaa Mobiles Admin';
 
 async function checkAdminProfile(userId) {
   if (!supabase || !userId) return false;
@@ -27,6 +28,19 @@ async function checkAdminProfile(userId) {
   return data?.status === 'active' && ADMIN_ROLES.includes(data.role);
 }
 
+function getVerifiedTotpFactor(factorsData) {
+  return (factorsData?.totp || []).find(
+    (factor) => factor.status === 'verified'
+  );
+}
+
+function isFriendlyNameConflict(error) {
+  return (
+    error?.code === 'mfa_factor_name_conflict' ||
+    /friendly name.*already exists/i.test(error?.message || '')
+  );
+}
+
 export function AuthProvider({ children }) {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
@@ -38,6 +52,55 @@ export function AuthProvider({ children }) {
     setMfaStep(null);
     setAuthError('');
     setIsLoading(false);
+  }, []);
+
+  const challengeFactor = useCallback(async (factor) => {
+    const { data, error } = await supabase.auth.mfa.challenge({
+      factorId: factor.id
+    });
+
+    if (error) {
+      return { success: false, error: error.message };
+    }
+
+    setMfaStep({
+      kind: 'challenge',
+      factorId: factor.id,
+      challengeId: data.id
+    });
+    setIsAuthenticated(false);
+    setIsLoading(false);
+
+    return { success: true, requiresMfa: true };
+  }, []);
+
+  const enrollTotp = useCallback(async (friendlyName) => {
+    const { data, error } = await supabase.auth.mfa.enroll({
+      factorType: 'totp',
+      friendlyName
+    });
+
+    if (error) {
+      return { success: false, error };
+    }
+
+    if (!data?.id || !data?.totp?.qr_code || !data?.totp?.secret) {
+      return {
+        success: false,
+        error: new Error('Supabase did not return the authenticator setup details.')
+      };
+    }
+
+    setMfaStep({
+      kind: 'enroll',
+      factorId: data.id,
+      qrCode: data.totp.qr_code,
+      secret: data.totp.secret
+    });
+    setIsAuthenticated(false);
+    setIsLoading(false);
+
+    return { success: true, requiresMfaEnrollment: true };
   }, []);
 
   const startMfa = useCallback(async () => {
@@ -52,67 +115,71 @@ export function AuthProvider({ children }) {
       return { success: false, error: factorsError.message };
     }
 
-    const verifiedTotpFactor = (factorsData?.totp || []).find(
-      (factor) => factor.status === 'verified'
-    );
+    // If this account already has a verified authenticator, challenge it.
+    const verifiedTotpFactor = getVerifiedTotpFactor(factorsData);
 
     if (verifiedTotpFactor) {
-      const { data: challengeData, error: challengeError } =
-        await supabase.auth.mfa.challenge({
-          factorId: verifiedTotpFactor.id
-        });
-
-      if (challengeError) {
-        return { success: false, error: challengeError.message };
-      }
-
-      setMfaStep({
-        kind: 'challenge',
-        factorId: verifiedTotpFactor.id,
-        challengeId: challengeData.id
-      });
-      setIsAuthenticated(false);
-      setIsLoading(false);
-
-      return { success: true, requiresMfa: true };
+      return challengeFactor(verifiedTotpFactor);
     }
 
-    // Remove abandoned, unverified enrollments so the admin can start a fresh setup.
-    const unverifiedFactors = (factorsData?.totp || []).filter(
+    // Clear abandoned, unverified TOTP enrollments before starting setup again.
+    const unverifiedTotpFactors = (factorsData?.totp || []).filter(
       (factor) => factor.status !== 'verified'
     );
 
-    for (const factor of unverifiedFactors) {
+    for (const factor of unverifiedTotpFactors) {
       const { error: unenrollError } = await supabase.auth.mfa.unenroll({
         factorId: factor.id
       });
 
-      if (unenrollError) {
+      if (
+        unenrollError &&
+        unenrollError.code !== 'mfa_factor_not_found'
+      ) {
         return { success: false, error: unenrollError.message };
       }
     }
 
-    const { data: enrollData, error: enrollError } =
-      await supabase.auth.mfa.enroll({
-        factorType: 'totp',
-        friendlyName: 'Muganiyaa Mobiles Admin'
-      });
+    const firstAttempt = await enrollTotp(MFA_FACTOR_NAME);
 
-    if (enrollError) {
-      return { success: false, error: enrollError.message };
+    if (firstAttempt.success) {
+      return firstAttempt;
     }
 
-    setMfaStep({
-      kind: 'enroll',
-      factorId: enrollData.id,
-      qrCode: enrollData.totp.qr_code,
-      secret: enrollData.totp.secret
-    });
-    setIsAuthenticated(false);
-    setIsLoading(false);
+    // A previous enrollment may still own the friendly name. Check once more
+    // for a verified factor before retrying with a distinct setup name.
+    if (!isFriendlyNameConflict(firstAttempt.error)) {
+      return {
+        success: false,
+        error: firstAttempt.error?.message || 'Could not set up authenticator verification.'
+      };
+    }
 
-    return { success: true, requiresMfaEnrollment: true };
-  }, []);
+    const { data: refreshedFactors, error: refreshError } =
+      await supabase.auth.mfa.listFactors();
+
+    if (refreshError) {
+      return { success: false, error: refreshError.message };
+    }
+
+    const newlyVerifiedFactor = getVerifiedTotpFactor(refreshedFactors);
+
+    if (newlyVerifiedFactor) {
+      return challengeFactor(newlyVerifiedFactor);
+    }
+
+    const retryName = `${MFA_FACTOR_NAME} ${Date.now()}`;
+    const retry = await enrollTotp(retryName);
+
+    if (!retry.success) {
+      return {
+        success: false,
+        error: retry.error?.message || 'Could not set up authenticator verification.'
+      };
+    }
+
+    return retry;
+  }, [challengeFactor, enrollTotp]);
 
   const restoreSession = useCallback(async (session) => {
     if (!session?.user) {
@@ -136,16 +203,16 @@ export function AuthProvider({ children }) {
       await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
 
     if (assuranceError) {
-      setIsAuthenticated(false);
-      setMfaStep(null);
+      await supabase.auth.signOut();
+      clearAuthState();
       setAuthError('Could not verify your sign-in security level. Please sign in again.');
-      setIsLoading(false);
       return;
     }
 
     if (assuranceData?.currentLevel === 'aal2') {
       setIsAuthenticated(true);
       setMfaStep(null);
+      setAuthError('');
       setIsLoading(false);
       return;
     }
@@ -153,8 +220,8 @@ export function AuthProvider({ children }) {
     const result = await startMfa();
 
     if (!result.success) {
-      setIsAuthenticated(false);
-      setMfaStep(null);
+      await supabase.auth.signOut();
+      clearAuthState();
       setAuthError(result.error || 'Could not start multi-factor authentication.');
     }
   }, [clearAuthState, startMfa]);
@@ -167,27 +234,27 @@ export function AuthProvider({ children }) {
 
     let isMounted = true;
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event, session) => {
-        // Avoid calling Supabase Auth APIs inside its auth-state callback.
-        setTimeout(() => {
-          if (!isMounted) return;
+    const {
+      data: { subscription }
+    } = supabase.auth.onAuthStateChange((event, session) => {
+      // Keep Supabase Auth API calls outside its auth-state callback.
+      setTimeout(() => {
+        if (!isMounted) return;
 
-          if (event === 'SIGNED_OUT') {
-            clearAuthState();
-            return;
-          }
+        if (event === 'SIGNED_OUT') {
+          clearAuthState();
+          return;
+        }
 
-          if (event === 'INITIAL_SESSION' && session) {
+        if (event === 'INITIAL_SESSION') {
+          if (session) {
             void restoreSession(session);
-          }
-
-          if (event === 'INITIAL_SESSION' && !session) {
+          } else {
             clearAuthState();
           }
-        }, 0);
-      }
-    );
+        }
+      }, 0);
+    });
 
     return () => {
       isMounted = false;
@@ -203,6 +270,7 @@ export function AuthProvider({ children }) {
     setAuthError('');
     setMfaStep(null);
     setIsAuthenticated(false);
+    setIsLoading(true);
 
     const { data, error } = await supabase.auth.signInWithPassword({
       email,
@@ -210,6 +278,7 @@ export function AuthProvider({ children }) {
     });
 
     if (error) {
+      setIsLoading(false);
       return { success: false, error: error.message };
     }
 
@@ -228,8 +297,14 @@ export function AuthProvider({ children }) {
     const result = await startMfa();
 
     if (!result.success) {
-      setAuthError(result.error || 'Could not start multi-factor authentication.');
-      return result;
+      await supabase.auth.signOut();
+      clearAuthState();
+
+      const message =
+        result.error || 'Could not start multi-factor authentication.';
+      setAuthError(message);
+
+      return { ...result, error: message };
     }
 
     return result;
@@ -243,8 +318,13 @@ export function AuthProvider({ children }) {
     const cleanedCode = String(code || '').replace(/\s/g, '');
 
     if (!/^\d{6}$/.test(cleanedCode)) {
-      return { success: false, error: 'Enter the 6-digit code from your authenticator app.' };
+      return {
+        success: false,
+        error: 'Enter the 6-digit code from your authenticator app.'
+      };
     }
+
+    setIsLoading(true);
 
     let challengeId = mfaStep.challengeId;
 
@@ -255,6 +335,7 @@ export function AuthProvider({ children }) {
         });
 
       if (challengeError) {
+        setIsLoading(false);
         return { success: false, error: challengeError.message };
       }
 
@@ -268,6 +349,7 @@ export function AuthProvider({ children }) {
     });
 
     if (verifyError) {
+      setIsLoading(false);
       return { success: false, error: verifyError.message };
     }
 
@@ -275,6 +357,7 @@ export function AuthProvider({ children }) {
       await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
 
     if (assuranceError || assuranceData?.currentLevel !== 'aal2') {
+      setIsLoading(false);
       return {
         success: false,
         error: 'The second verification step could not be confirmed. Please try again.'
@@ -284,7 +367,11 @@ export function AuthProvider({ children }) {
     const { data: userData, error: userError } = await supabase.auth.getUser();
 
     if (userError || !userData?.user) {
-      return { success: false, error: 'Your session expired. Please sign in again.' };
+      setIsLoading(false);
+      return {
+        success: false,
+        error: 'Your session expired. Please sign in again.'
+      };
     }
 
     const allowed = await checkAdminProfile(userData.user.id);
@@ -311,6 +398,7 @@ export function AuthProvider({ children }) {
     if (supabase) {
       await supabase.auth.signOut();
     }
+
     clearAuthState();
   }
 
@@ -318,6 +406,7 @@ export function AuthProvider({ children }) {
     if (supabase) {
       await supabase.auth.signOut();
     }
+
     clearAuthState();
   }
 

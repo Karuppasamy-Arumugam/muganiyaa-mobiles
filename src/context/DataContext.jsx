@@ -260,9 +260,7 @@ export function DataProvider({ children }) {
   const reloadEnquiries = useCallback(async () => {
     if (!supabase) {
       setEnquiriesLoading(false);
-      setEnquiriesError(
-        isProductionBuild ? 'Enquiries are temporarily unavailable.' : ''
-      );
+      setEnquiriesError('');
       return;
     }
 
@@ -270,6 +268,20 @@ export function DataProvider({ children }) {
     setEnquiriesError('');
 
     try {
+      const {
+        data: { session },
+        error: sessionError
+      } = await supabase.auth.getSession();
+
+      if (sessionError) throw sessionError;
+
+      // Enquiries contain personal information. Do not query them for signed-out visitors.
+      if (!session?.user) {
+        setDb((current) => ({ ...current, enquiries: [] }));
+        setEnquiriesError('');
+        return;
+      }
+
       const { data, error } = await supabase
         .from('enquiries')
         .select(
@@ -291,36 +303,45 @@ export function DataProvider({ children }) {
       setEnquiriesLoading(false);
     }
   }, []);
-
   // Load the admin inbox after startup and refresh it after auth or live changes.
   useEffect(() => {
     if (!supabase) {
       setEnquiriesLoading(false);
-      setEnquiriesError(
-        isProductionBuild ? 'Enquiries are temporarily unavailable.' : ''
-      );
+      setEnquiriesError('');
       return undefined;
     }
 
     let cancelled = false;
+
+    const clearEnquiries = () => {
+      setDb((current) => ({ ...current, enquiries: [] }));
+      setEnquiriesError('');
+      setEnquiriesLoading(false);
+    };
+
     const refreshEnquiries = () => {
       if (!cancelled) void reloadEnquiries().catch(() => {});
     };
 
+    // reloadEnquiries checks for an authenticated session before querying the table.
     refreshEnquiries();
 
-    const { data: authListener } = supabase.auth.onAuthStateChange(
-      (event, session) => {
-        if (
-          session &&
-          ['INITIAL_SESSION', 'SIGNED_IN', 'TOKEN_REFRESHED'].includes(event)
-        ) {
-          setTimeout(() => {
-            if (!cancelled) refreshEnquiries();
-          }, 0);
-        }
+    const {
+      data: { subscription }
+    } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'SIGNED_OUT' || !session?.user) {
+        clearEnquiries();
+        return;
       }
-    );
+
+      if (
+        ['INITIAL_SESSION', 'SIGNED_IN', 'TOKEN_REFRESHED'].includes(event)
+      ) {
+        setTimeout(() => {
+          if (!cancelled) refreshEnquiries();
+        }, 0);
+      }
+    });
 
     const channel = supabase
       .channel('enquiries-live')
@@ -356,11 +377,10 @@ export function DataProvider({ children }) {
 
     return () => {
       cancelled = true;
-      authListener.subscription.unsubscribe();
+      subscription.unsubscribe();
       supabase.removeChannel(channel);
     };
   }, [reloadEnquiries]);
-
   // Load showroom settings from Supabase and expose loading, error, and retry state.
   const reloadContactSettings = useCallback(async () => {
     if (!supabase) {
@@ -1673,3 +1693,4 @@ export function useData() {
 
   return context;
 }
+
