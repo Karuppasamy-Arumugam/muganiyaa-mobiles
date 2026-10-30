@@ -59,7 +59,7 @@ export default function AdminLayout() {
     { to: '/store-owner-7f3c9a2e6b41d805/content', label: 'Website Content', icon: FileText },
     { to: '/store-owner-7f3c9a2e6b41d805/contact', label: 'Contact & Hours', icon: PhoneCall },
     { to: '/store-owner-7f3c9a2e6b41d805/chatbot', label: 'Chatbot Settings', icon: Bot },
-    { to: '/store-owner-7f3c9a2e6b41d805/maintenance', label: 'Store Data & Maintenance', icon: RotateCcw }
+    { to: '/store-owner-7f3c9a2e6b41d805/system-status', label: 'Store Data & Maintenance', icon: RotateCcw }
   ];
 
   return (
@@ -77,38 +77,16 @@ export default function AdminLayout() {
               {mobileSidebarOpen ? <X size={20} /> : <Menu size={20} />}
             </button>
             <BrandLogo size="sm" />
-            <span className="badge bg-danger-subtle text-danger fw-bold ms-1" style={{ fontSize: '0.72rem' }}>
+            <span className="badge bg-danger-subtle text-danger fw-bold ms-1 d-none d-sm-inline-block" style={{ fontSize: '0.72rem' }}>
               Owner Portal
             </span>
           </div>
 
           <div className="d-flex align-items-center gap-2">
-            <Link
-              to="/"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="btn btn-outline-secondary btn-sm d-inline-flex align-items-center gap-1"
-              title="Open Public Website in New Tab"
-            >
-              <span>Live Website</span>
-              <ExternalLink size={14} />
-            </Link>
-
             <Link to="/store-owner-7f3c9a2e6b41d805/products/new" className="btn btn-brand-primary btn-sm d-none d-sm-inline-flex align-items-center gap-1">
               <Plus size={16} />
               <span>Add Product</span>
             </Link>
-
-            <button
-              type="button"
-              className="btn btn-outline-danger btn-sm d-inline-flex align-items-center gap-1"
-              disabled={isLoggingOut}
-              onClick={handleLogout}
-              title="End Admin Session"
-            >
-              <LogOut size={14} />
-              <span className="d-none d-md-inline">{isLoggingOut ? 'Signing out…' : 'Logout'}</span>
-            </button>
           </div>
         </div>
       </header>
@@ -171,13 +149,35 @@ export default function AdminLayout() {
             })}
           </nav>
 
-          <div className="p-3 border-top bg-light mt-auto">
+          <div className="p-3 border-top bg-light mt-auto admin-sidebar-footer">
             <div className="d-flex align-items-center gap-2">
               <div className="rounded-circle bg-success" style={{ width: '8px', height: '8px' }} />
               <small className="text-muted" style={{ fontSize: '0.75rem' }}>
                 Admin Workspace
               </small>
             </div>
+
+            <Link
+              to="/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="btn btn-outline-secondary btn-sm w-100 d-flex align-items-center justify-content-center gap-2 mt-3"
+              title="Open Public Website in New Tab"
+            >
+              <span>Live Website</span>
+              <ExternalLink size={14} />
+            </Link>
+
+            <button
+              type="button"
+              className="btn btn-outline-danger btn-sm w-100 d-flex align-items-center justify-content-center gap-2 mt-2"
+              disabled={isLoggingOut}
+              onClick={handleLogout}
+              title="End Admin Session"
+            >
+              <LogOut size={14} />
+              <span>{isLoggingOut ? 'Signing out…' : 'Logout'}</span>
+            </button>
           </div>
         </aside>
 

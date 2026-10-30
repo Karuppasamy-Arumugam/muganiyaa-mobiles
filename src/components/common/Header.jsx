@@ -177,6 +177,13 @@ export default function Header() {
                 Cooling & Appliances
               </Link>
               <Link
+                to="/offers"
+                className="px-2 py-2 fw-semibold text-dark text-decoration-none rounded hover-bg-light"
+                onClick={() => setMobileMenuOpen(false)}
+              >
+                Offers & EMI
+              </Link>
+              <Link
                 to="/about"
                 className="px-2 py-2 fw-semibold text-dark text-decoration-none rounded hover-bg-light"
                 onClick={() => setMobileMenuOpen(false)}

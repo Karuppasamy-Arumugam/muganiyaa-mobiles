@@ -1,6 +1,6 @@
 import React from 'react';
 import { NavLink, Link } from 'react-router-dom';
-import { Grid, Smartphone, Headphones, Tv, Wrench, Sparkles } from 'lucide-react';
+import { Grid, Smartphone, Headphones, Tv, Tag, Wrench, Sparkles } from 'lucide-react';
 
 export default function Navbar() {
   return (
@@ -59,6 +59,19 @@ export default function Navbar() {
             >
               <Tv size={16} />
               <span>TV</span>
+            </NavLink>
+
+            <NavLink
+              to="/offers"
+              className={({ isActive }) =>
+                `d-inline-flex align-items-center gap-2 px-3 py-2 rounded-pill text-decoration-none fw-semibold transition-all ${
+                  isActive ? 'bg-danger text-white' : 'text-dark hover-bg-light'
+                }`
+              }
+              style={{ fontSize: '0.9rem' }}
+            >
+              <Tag size={16} />
+              <span>Offers</span>
             </NavLink>
           </div>
 
