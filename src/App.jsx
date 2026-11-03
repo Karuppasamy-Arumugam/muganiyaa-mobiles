@@ -107,7 +107,11 @@ export default function App() {
             <Route path="content" element={<AdminContent />} />
             <Route path="contact" element={<AdminContact />} />
             <Route path="chatbot" element={<AdminChatbot />} />
-            <Route path="maintenance" element={<AdminMaintenance />} />
+            <Route path="system-status" element={<AdminMaintenance />} />
+            <Route
+              path="maintenance"
+              element={<Navigate to={`${ADMIN_PATH}/system-status`} replace />}
+            />
           </Route>
 
           {/* Unknown URLs */}
